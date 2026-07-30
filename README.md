@@ -1,0 +1,330 @@
+# pico-rcm
+
+An RCM payload injector for the Nintendo Switch, running on a Raspberry Pi
+Pico. It is two devices in one binary:
+
+- **DEVICE mode** — the Pico appears as a small USB drive. You drop a payload
+  file on it. That is the entire configuration interface.
+- **HOST mode** — the Pico becomes a USB host, waits for a Tegra bootrom to
+  appear, and sends the payload the moment it does.
+
+No PC, no app, no cable swapping at the critical moment. You load the payload
+once at your desk, then in the field the Pico is a dongle you plug in.
+
+The firmware contains no payload of its own and does not download one. You
+supply the file.
+
+---
+
+## Requirements and scope
+
+This works only on Switch units whose bootrom is vulnerable to Fusée Gelée —
+unpatched Erista hardware. Patched units and Mariko simply will not respond,
+and the Pico will sit there blinking "waiting". There is nothing to configure
+for that case: it either enumerates as an APX device or it does not.
+
+Intended for homebrew on hardware you own.
+
+---
+
+## The payload file
+
+**The file must be named `payload.bin`, in the root of the drive.**
+
+That name is not a suggestion, it is a literal string compiled into the
+firmware ([`PAYLOAD_FILENAME` in src/config.h](src/config.h#L28)). The
+filesystem is FAT12 with long filenames disabled, so:
+
+| | |
+|---|---|
+| Name | `payload.bin` — 8.3 format, nothing else is looked at |
+| Location | root directory, **not** a subfolder |
+| Case | irrelevant, in both directions — see below |
+| Max size | **131056 bytes (0x1FFF0)** — see [Why 128 KB](#why-128-kb) |
+
+So if you downloaded `hekate_ctcaer_6.2.0.bin`, **rename it**. A name that
+does not fit 8.3 gets stored with a mangled short name like `HEKATE~1.BIN`,
+and the firmware will not find it. The symptom is the error LED with
+`[rcm] payload.bin non trovato` on the serial log.
+
+Case is the one thing you do not have to think about. FAT stores short
+directory entries uppercase, and FatFs uppercases the name it searches for
+before comparing (the non-LFN branch of `create_name()` in `ff.c`). So
+`payload.bin` and `PAYLOAD.BIN` are the same file to both sides — it does not
+matter how your OS wrote it, nor which form is compiled into the firmware.
+What matters is that the name fits 8.3, because that is what decides whether
+a usable short entry exists at all.
+
+### What if I put two files on it?
+
+Nothing breaks, but only `payload.bin` is ever read. Every other file is
+ignored — it just sits there consuming space. There is no menu, no ordering,
+no "first file wins": the firmware opens one hardcoded name and that is it.
+
+So to keep several payloads around, the workflow is to rename the one you
+want to `payload.bin`:
+
+```
+payload.bin     <- the one that will be injected
+HEKATE.BAK      <- ignored
+LINUX.BAK       <- ignored
+```
+
+Two practical limits if you do that:
+
+- The partition is **1 MB**, plenty for a handful of payloads.
+- The root directory has room for **32 entries**
+  ([`n_root` in fs_setup.c](src/storage/fs_setup.c#L31)), and the volume
+  label uses one. Subdirectories are fine for storage — just remember the
+  injected file has to be in the root.
+
+### Copy, then wait for the LED
+
+Writes are cached in RAM and committed to flash 750 ms after the bus goes
+quiet ([`FLUSH_IDLE_MS`](src/config.h#L25)). The LED flickers fast while a
+write is pending and returns to a slow pulse once it is safe.
+
+**Eject the drive, or at least wait for the slow pulse, before unplugging.**
+Pulling the cable mid-flicker loses the file. The commit cannot happen inside
+the USB callback — erasing a flash sector blocks ~40 ms with interrupts off,
+which would strangle the USB ISR — so it is deferred to the main loop, and
+that is why the delay exists.
+
+---
+
+## Wiring
+
+```
+Pico                          Switch
+────                          ──────
+USB port  ───────────────────  USB-C  (data + VBUS)
+
+GPIO15  ──┐
+          │  jumper           closed  = HOST mode  (inject)
+GND     ──┘                   open    = DEVICE mode (USB drive)
+```
+
+`GPIO15` is a second contact **mechanically coupled to the power jumper**.
+Pin 40 (VBUS) is not readable by software on the RP2040, so the firmware
+cannot see the real power jumper — it reads this one instead, and you wire
+the two so they move together.
+
+The default is fail-safe: **contact open means DEVICE mode.** Forget the
+jumper and the result is "sent nothing", not "sent a payload into an unknown
+device". The pin is sampled 16 times and needs 14 agreeing reads
+([mode.c](src/mode.c#L17)), because a half-inserted or oxidised jumper is
+exactly the failure you do not want to get wrong.
+
+The role is chosen once at boot and never changes — there is only one USB
+controller.
+
+You also need the target's RCM jack pin shorted, the usual way. That part is
+outside the scope of this firmware.
+
+---
+
+## Using it
+
+**1. Load the payload.** Jumper open, plug the Pico into a PC. A drive named
+`PICORCM` appears. Copy your payload as `payload.bin`. Eject.
+
+**2. Move the jumper** to closed (HOST).
+
+**3. Put the Switch in RCM** and plug in the Pico. Injection starts by itself
+the moment the bootrom enumerates — there is no button. The trigger is the
+appearance of a device with VID:PID `0955:7321`, and the VID/PID filter is the
+only thing standing between your payload and some random USB stick.
+
+**4. After a successful injection the Pico does not re-arm.** It stays in the
+"done" pattern so it cannot fire twice. Power-cycle it for another go. A
+*failed* attempt does re-arm on unplug.
+
+---
+
+## LED patterns
+
+The LED is the whole interface — powered from a phone or a power bank there is
+no serial console, and the USB port belongs to the target.
+
+| Pattern | Meaning |
+|---|---|
+| 3 quick flashes at power-on | firmware is running, before any USB |
+| slow pulse, ~2 s apart | DEVICE mode, drive is mountable and idle |
+| fast flicker | writing — **do not unplug** |
+| single flash per second | HOST mode, waiting for a target |
+| double flash | a device is attached but its VID/PID is not APX — ignored |
+| solid on | sending |
+| long on, brief off | done |
+| rapid continuous blinking | error |
+
+---
+
+## What actually happens on the wire
+
+The exploit is Fusée Gelée (public since April 2018). The firmware builds one
+RCM message whose declared length is larger than the buffer that receives it,
+so the copy overruns the bootrom's stack.
+
+Layout of the message body once it lands in the target's IRAM:
+
+```
+0x40010000  ┌─────────────────────────────┐
+            │  0x4001F000 repeated        │  0xF000 bytes of stack spray:
+            │  0x3C00 times               │  whatever return address gets
+            │                             │  smashed, it jumps to intermezzo
+0x4001F000  ├─────────────────────────────┤
+            │  intermezzo (92 bytes)      │  copies the payload down and
+            │  + padding to 0x1000        │  jumps into it
+0x40020000  ├─────────────────────────────┤
+            │  your payload.bin           │
+            └─────────────────────────────┘
+```
+
+Ahead of all that go 680 bytes of header, of which only the first four matter:
+the declared length, `0x30298`. Then a `GET_STATUS` control request with
+`wLength = 0x7000` triggers the overrun.
+
+Two details in the implementation are worth knowing, because both are easy to
+get wrong and neither fails loudly:
+
+**The message is a byte stream, not a sequence of aligned blocks.** The header
+is 680 bytes (0x2A8), so everything after it straddles the 0x1000 USB packet
+boundaries. Padding the header out to a full packet shifts the whole memory
+map and the injection quietly does nothing. This is why
+[rcm_proto.c](src/host/rcm_proto.c) writes through a byte-level buffer and
+flushes full packets, rather than sending each piece as its own transfer.
+
+**The payload is never held in RAM.** The Pico has 264 KB. FatFs reads the
+file in small pieces which are appended to the outgoing packet, so payload
+size does not affect memory use at all.
+
+Constants come from `fusee-launcher.py` (Katherine Temkin / ReSwitched); the
+Fusée Gelée paper documents why it works.
+They are collected at the top of [rcm_proto.h](src/host/rcm_proto.h) with the
+memory map spelled out, and four `_Static_assert`s fail the build if the
+arithmetic stops adding up.
+
+### Why 128 KB
+
+The payload lands at `0x40020000` and Tegra X1 IRAM ends at `0x40040000`.
+That is `0x20000` of space, and `RCM_PAYLOAD_MAX` is 16 bytes under it. A
+larger payload cannot work on any unit, so the firmware rejects it before
+sending anything instead of letting it turn into a stalled bulk transfer
+halfway through.
+
+The same number falls out of a completely different route — keeping the bytes
+actually sent close to the declared `0x30298` — which is a good sign it is the
+right number.
+
+### About the trigger result
+
+Once the trigger lands, the target is already executing your payload and has
+no reason to close the control transfer. **A timeout there is the normal
+outcome of a successful injection**, so the firmware does not treat it as a
+failure — otherwise the error LED would come on precisely when everything
+worked, and the LED is all you have in the field.
+
+A *stall* is different: it means the device rejected the request and the
+overrun never happened. That is a real failure and it is reported as one.
+[rcm_host.c](src/host/rcm_host.c) reports the four outcomes separately rather
+than flattening them to a boolean, and [rcm_proto.c](src/host/rcm_proto.c)
+decides which ones count as errors.
+
+The only definitive verdict is still the target's screen.
+
+---
+
+## Building
+
+Needs the Pico SDK (2.3.0) and FatFs, which is not vendored:
+
+1. Download FatFs from <http://elm-chan.org/fsw/ff/>
+2. Extract into `lib/fatfs/` so that `lib/fatfs/source/ff.c` exists
+3. Configure `lib/fatfs/source/ffconf.h` — see [FATFS_SETUP.md](FATFS_SETUP.md)
+
+Do not put an `ffconf.h` in the project root. `ff.h` checks `FFCONF_DEF`
+against its own release and rejects a config file from a different one; the
+root copy wins on the include path and you get `#error Wrong configuration
+file`. CMake fails the configure step with an explanation if it finds one.
+
+```sh
+cmake -B build -G Ninja
+ninja -C build
+```
+
+Output is `build/pico_rcm.uf2`. Hold BOOTSEL, plug in, drop the file on the
+`RPI-RP2` drive.
+
+### Build options
+
+`FORCE_ROLE` pins the USB role at compile time instead of reading the jumper:
+
+```sh
+cmake -B build -DFORCE_ROLE=host      # inject only
+cmake -B build -DFORCE_ROLE=device    # USB drive only
+cmake -B build -DFORCE_ROLE=          # default: jumper decides at boot
+```
+
+Useful as a fallback if dual-role does not link, or for testing one half
+without touching the wiring.
+
+### Serial log
+
+USB stdio is impossible — the port belongs to the target or to the PC. Logging
+goes to **UART on GPIO0 (TX) / GPIO1 (RX), 115200**. In the field you will not
+have it; during development it is the only window.
+
+### Size budget
+
+`./analyze.sh` reports flash and RAM against the real ceilings, reading
+`FS_FLASH_OFFSET` from `src/config.h` rather than hardcoding it. It also
+checks that `commit_sector` really ended up in SRAM — `__not_in_flash_func`
+does not imply `noinline`, so `-O3` can inline it into a flash-resident caller
+and silently throw the placement away. There is no build error for that, only
+a device that hangs when it writes to flash.
+
+---
+
+## Flash layout
+
+```
+0x000000 ┌──────────────────┐
+         │  firmware        │  1 MB
+0x100000 ├──────────────────┤
+         │  FAT12 partition │  1 MB   <- the drive you see over USB
+0x200000 └──────────────────┘
+```
+
+Both halves are set by `FS_FLASH_OFFSET` and `FS_FLASH_SIZE` in
+[src/config.h](src/config.h#L17). On a Pico with different flash, those two
+lines are all you change.
+
+The firmware growing past `0x100000` would corrupt the filesystem with no
+error message, which is what `analyze.sh` watches for.
+
+The partition is formatted automatically on first boot, or if the FAT is
+found unreadable — FAT12, single FAT copy, 4 KB clusters matched to the flash
+erase sector. FatFs and the MSC device are never active at the same time by
+construction: formatting runs once before `tud_init()`, so concurrent access
+to the FAT is not a problem this project has to solve.
+
+---
+
+## Layout of the source
+
+```
+src/
+  main.c              role selection at boot, the two main loops
+  mode.c              reads the jumper (debounced)
+  status.c            LED patterns
+  usb_descriptors.c   MSC descriptors
+  host/
+    rcm_host.c        enumeration, VID/PID filter, USB transfers
+    rcm_proto.c       builds and streams the RCM message
+    rcm_proto.h       protocol constants + memory map
+  storage/
+    flash_fat.c       block device over internal flash, 4 KB write cache
+    diskio_flash.c    FatFs glue
+    msc_device.c      USB mass storage callbacks
+    fs_setup.c        first-boot format
+```
