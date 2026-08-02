@@ -1,10 +1,10 @@
 /*
- * diskio_flash.c - glue FatFs -> flash_fat
+ * diskio_flash.c - FatFs -> flash_fat glue
  *
- * Serve solo in HOST mode, per rileggere payload.bin da dentro il Pico.
- * In DEVICE mode il filesystem lo manipola l'host via MSC e FatFs non
- * viene nemmeno montato: i due accessi non sono mai contemporanei,
- * che e' precisamente il caveat che i FAT12 embedded non sanno gestire.
+ * Only needed in HOST mode, to read payload.bin back from inside the Pico.
+ * In DEVICE mode the filesystem is manipulated by the host over MSC and
+ * FatFs is not even mounted: the two accessors are never simultaneous,
+ * which is precisely the caveat embedded FAT12 setups cannot handle.
  */
 #include <string.h>
 #include "ff.h"
@@ -53,8 +53,8 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
             *(WORD *)buff = DISK_BLOCK_SIZE;
             return RES_OK;
         case GET_BLOCK_SIZE:
-            // In unita' di settori: dice a FatFs di allineare il FAT
-            // ai settori di cancellazione, riducendo le riscritture.
+            // In units of sectors: tells FatFs to align the FAT to the
+            // erase sectors, which cuts down on rewrites.
             *(DWORD *)buff = FLASH_SECTOR_BYTES / DISK_BLOCK_SIZE;
             return RES_OK;
         default:
@@ -63,6 +63,6 @@ DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff) {
 }
 
 DWORD get_fattime(void) {
-    // Nessun RTC alimentato: data fissa. Irrilevante per un solo file.
+    // No battery-backed RTC: fixed date. Irrelevant for a single file.
     return ((DWORD)(2025 - 1980) << 25) | ((DWORD)1 << 21) | ((DWORD)1 << 16);
 }

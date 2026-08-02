@@ -1,13 +1,14 @@
 /*
  * rcm_host.c
  *
- * Enumerazione e filtro del target. Il trigger dell'invio NON e' un
- * pulsante: e' la comparsa di un device con VID/PID APX. Il timing lo
- * detta il target, e il filtro sul VID/PID e' l'unica garanzia di non
- * sparare il payload dentro una chiavetta USB qualsiasi.
+ * Enumeration and target filtering. The send trigger is NOT a button: it is
+ * the appearance of a device with the APX VID/PID. The target dictates the
+ * timing, and the VID/PID filter is the only thing keeping the payload from
+ * being fired into some random USB stick.
  *
- * Log su UART (GPIO0, 115200). In campo non ce l'hai, ma in sviluppo e'
- * l'unica finestra: la porta USB serve al target, non a una console.
+ * Logging goes to UART (GPIO0, 115200). You will not have it in the field,
+ * but during development it is the only window available: the USB port
+ * belongs to the target, not to a console.
  */
 #include <stdio.h>
 #include <string.h>
@@ -19,9 +20,9 @@
 #include "rcm_proto.h"
 
 typedef enum {
-    H_IDLE,        // nessun device collegato
-    H_WRONG_DEV,   // device presente, non e' il target
-    H_READY,       // target agganciato, endpoint aperti
+    H_IDLE,        // nothing attached
+    H_WRONG_DEV,   // a device is present, but it is not the target
+    H_READY,       // target latched, endpoints open
     H_INJECTING,
     H_DONE,
     H_FAILED
@@ -32,21 +33,21 @@ static uint8_t  dev_addr  = 0;
 static uint8_t  ep_out    = 0;
 static uint8_t  ep_in     = 0;
 
-// Completamento dei transfer: TinyUSB e' asincrono, questi flag lo
-// rendono sincrono nel main loop senza tirare in mezzo un RTOS.
+// Transfer completion: TinyUSB is asynchronous, and these flags make it
+// synchronous in the main loop without dragging in an RTOS.
 static volatile bool     xfer_done = false;
 static volatile bool     xfer_ok   = false;
 static volatile uint32_t xfer_len  = 0;
 
-// Il trigger finale ha i suoi flag, separati da quelli bulk. Qui si
-// conserva il result grezzo di TinyUSB, non un bool: serve a distinguere
-// stall e timeout (vedi rcm_xfer_t).
+// The final trigger has its own flags, separate from the bulk ones. What is
+// kept here is TinyUSB's raw result rather than a bool: it is needed to tell
+// a stall from a timeout (see rcm_xfer_t).
 static volatile bool          trigger_done   = false;
 static volatile xfer_result_t trigger_result = XFER_RESULT_INVALID;
 
 uint8_t rcm_dev_addr(void) { return dev_addr; }
 
-// ------------------------------------------------------------- callback
+// ------------------------------------------------------------- callbacks
 
 static void xfer_cb(tuh_xfer_t *xfer) {
     xfer_ok   = (xfer->result == XFER_RESULT_SUCCESS);
@@ -70,13 +71,13 @@ const char *rcm_xfer_name(rcm_xfer_t r) {
 }
 
 /*
- * Endpoint del bootrom APX. Il device e' vendor-specific: nessun class
- * driver di TinyUSB se ne occupa, gli endpoint si aprono a mano.
+ * The APX bootrom's endpoints. The device is vendor-specific: no TinyUSB
+ * class driver claims it, so the endpoints are opened by hand.
  *
- * Sono indirizzi FISSI, non cercati nel descrittore di configurazione.
- * Il bootrom espone sempre e solo questa coppia, e leggere il
- * descrittore aggiunge un punto di rottura che non serve: se quella
- * lettura fallisce si perde l'iniezione per niente.
+ * These are FIXED addresses, not looked up in the configuration descriptor.
+ * The bootrom always exposes this pair and nothing else, and reading the
+ * descriptor would only add a failure point for no gain: if that read fails
+ * the injection is lost for nothing.
  */
 static const tusb_desc_endpoint_t apx_ep_out_desc = {
     .bLength          = sizeof(tusb_desc_endpoint_t),
@@ -120,7 +121,7 @@ void tuh_mount_cb(uint8_t addr) {
     printf("[host] device su addr %u: %04x:%04x\n", addr, vid, pid);
 
     if (vid != APX_VID || pid != APX_PID) {
-        // Qualsiasi altra cosa viene ignorata, di proposito.
+        // Anything else is ignored, deliberately.
         printf("[host] non e' il target (attesi %04x:%04x) - ignoro\n",
                APX_VID, APX_PID);
         state = H_WRONG_DEV;
@@ -143,20 +144,20 @@ void tuh_umount_cb(uint8_t addr) {
     if (addr != dev_addr) return;
     printf("[host] device sganciato (addr %u)\n", addr);
     dev_addr = ep_in = ep_out = 0;
-    // Dopo un'iniezione riuscita il target si sgancia: e' normale, e non
-    // si torna in attesa per non ripetere l'invio.
+    // After a successful injection the target detaches: that is normal, and
+    // we do not go back to waiting, so the send cannot be repeated.
     if (state != H_DONE) {
         state = H_IDLE;
         status_set(ST_HOST_WAIT);
     }
 }
 
-// ------------------------------------------------------------- transfer
+// ------------------------------------------------------------- transfers
 
 static bool wait_xfer(uint32_t timeout_ms) {
     uint32_t t0 = to_ms_since_boot(get_absolute_time());
     while (!xfer_done) {
-        tuh_task();                       // il completamento arriva da qui
+        tuh_task();                       // completion is delivered from here
         if (to_ms_since_boot(get_absolute_time()) - t0 > timeout_ms) {
             printf("[host] timeout transfer (%lu ms)\n", (unsigned long)timeout_ms);
             return false;
@@ -202,29 +203,29 @@ bool rcm_bulk_in(void *data, uint32_t len, uint32_t timeout_ms) {
 }
 
 /*
- * Control transfer usata come trigger finale, SINCRONA.
+ * The control transfer used as the final trigger, SYNCHRONOUS.
  *
- * ATTENZIONE al callback: in TinyUSB complete_cb == NULL NON significa
- * "fire and forget", significa trasferimento BLOCCANTE su un semaforo
- * OSAL che qui non verrebbe mai segnalato, perche' nessun altro contesto
- * chiama tuh_task(): con NULL il firmware si piantava. Serve un callback
- * non nullo, e l'attesa la si fa a mano pompando tuh_task() - lo stesso
- * schema di wait_xfer per i bulk.
+ * MIND THE CALLBACK: in TinyUSB, complete_cb == NULL does NOT mean "fire and
+ * forget", it means a BLOCKING transfer on an OSAL semaphore that would never
+ * be signalled here, because no other context calls tuh_task() - with NULL
+ * the firmware would hang. A non-null callback is required, and the wait is
+ * done by hand while pumping tuh_task(), the same shape as wait_xfer for the
+ * bulk transfers.
  *
- * Non decide cosa sia un errore: riporta l'esito e basta. Per il trigger
- * RCM un timeout e' l'esito normale di un'iniezione riuscita, e quella
- * politica sta in rcm_proto.c, non qui.
+ * It does not decide what counts as an error: it just reports the outcome.
+ * For the RCM trigger a timeout is the normal outcome of a successful
+ * injection, and that policy lives in rcm_proto.c, not here.
  */
 rcm_xfer_t rcm_control_out(uint8_t bmRequestType, uint8_t bRequest,
                            uint16_t wValue, uint16_t wIndex, uint16_t wLength,
                            uint32_t timeout_ms) {
-    // static: il transfer e' asincrono e TinyUSB potrebbe leggere questi
-    // buffer dopo il ritorno della funzione.
+    // static: the transfer is asynchronous and TinyUSB may read these
+    // buffers after this function has returned.
     //
-    // La dimensione NON e' arbitraria: il trigger e' una IN con wLength
-    // 0x7000 e TinyUSB scrive nel buffer quello che il device consegna
-    // prima di piantarsi. Un buffer piu' corto della wLength piu' grande
-    // che passiamo qui e' memoria corrotta a caso.
+    // The size is NOT arbitrary: the trigger is an IN with wLength 0x7000,
+    // and TinyUSB writes into the buffer whatever the device delivers before
+    // it dies. A buffer shorter than the largest wLength passed here is
+    // random memory corruption.
     static CFG_TUH_MEM_SECTION CFG_TUH_MEM_ALIGN uint8_t scratch[RCM_TRIGGER_WLENGTH];
     static tusb_control_request_t req;
 
@@ -247,7 +248,7 @@ rcm_xfer_t rcm_control_out(uint8_t bmRequestType, uint8_t bRequest,
         .ep_addr     = 0,
         .setup       = &req,
         .buffer      = scratch,
-        .complete_cb = trigger_cb,     // NON NULL: vedi commento sopra
+        .complete_cb = trigger_cb,     // NOT NULL: see the comment above
         .user_data   = 0
     };
 

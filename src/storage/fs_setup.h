@@ -2,8 +2,8 @@
 #define FS_SETUP_H
 #include <stdbool.h>
 
-// Monta per verifica; se il FAT non e' valido lo crea. Da chiamare al
-// boot, PRIMA di tud_init().
+// Mounts to check; creates the FAT if it is not valid. Call it at boot,
+// BEFORE tud_init().
 bool fs_ensure_formatted(void);
 
 #endif

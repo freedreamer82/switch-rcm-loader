@@ -1,13 +1,12 @@
 /*
  * main.c
  *
- * Un solo controller USB, quindi il ruolo si sceglie al boot e non si
- * cambia piu'. Il jumper di alimentazione non e' leggibile via software
- * (il pin 40 non arriva all'RP2040), percio' MODE_PIN e' un secondo
- * contatto accoppiato meccanicamente al primo.
+ * There is a single USB controller, so the role is picked at boot and never
+ * changes. MODE_PIN is a plain jumper to GND: closed selects HOST, open
+ * selects DEVICE.
  *
- * Fail-safe: contatto aperto = DEVICE. Se dimentichi il ponticello il
- * risultato e' "non invio niente", non "invio a un target ignoto".
+ * Fail-safe: contact open = DEVICE. Forget the jumper and the result is
+ * "sent nothing", not "sent a payload into an unknown device".
  */
 #include <pico/stdlib.h>
 #include <tusb.h>
@@ -37,9 +36,9 @@ static void run_device_mode(void) {
 
     while (true) {
         tud_task();
-        // Il commit in flash sta qui, fuori dai callback: cancellare un
-        // settore blocca ~40 ms a interruzioni spente e dentro
-        // tud_msc_write10_cb strozzerebbe l'ISR USB.
+        // The flash commit lives here, outside the callbacks: erasing a
+        // sector blocks for ~40 ms with interrupts off, and doing that
+        // inside tud_msc_write10_cb would choke the USB ISR.
         storage_flush_task();
         if (!storage_dirty()) status_set(ST_MSC_IDLE);
         status_task();
@@ -63,7 +62,7 @@ int main(void) {
     stdio_init_all();
     status_init();
 
-    // Tre lampi: conferma che il firmware gira, prima di qualsiasi USB.
+    // Three flashes: proof that the firmware runs, before any USB.
     for (int i = 0; i < 40; i++) { status_task(); sleep_ms(15); }
 
     run_mode_t mode = mode_read();

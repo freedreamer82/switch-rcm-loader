@@ -1,11 +1,11 @@
 /*
- * msc_device.c - callback USB Mass Storage
+ * msc_device.c - USB Mass Storage callbacks
  *
- * Nota su dove gira questo codice: TinyUSB chiama questi callback da
- * dentro tud_task(), quindi dal main loop, NON dall'ISR. Scrivere in
- * flash qui sarebbe tecnicamente legale ma bloccherebbe l'ISR USB per
- * ~40 ms a settore. Percio' write10 accumula e il commit lo fa
- * storage_flush_task() quando il bus e' fermo.
+ * A note on where this code runs: TinyUSB calls these callbacks from inside
+ * tud_task(), so from the main loop, NOT from the ISR. Writing to flash here
+ * would be technically legal but would block the USB ISR for ~40 ms per
+ * sector. That is why write10 accumulates and the commit is done by
+ * storage_flush_task() once the bus goes quiet.
  */
 #include <string.h>
 #include <tusb.h>
@@ -13,9 +13,9 @@
 #include "status.h"
 #include "flash_fat.h"
 
-// Opcode SCSI standard (SYNCHRONIZE CACHE (10)). Definito qui invece di
-// usare l'enum di TinyUSB perche' il nome del simbolo e' cambiato tra
-// versioni: 0x35 non cambia mai.
+// Standard SCSI opcode (SYNCHRONIZE CACHE (10)). Defined here rather than
+// using TinyUSB's enum because the symbol name changed between versions:
+// 0x35 never does.
 #define SCSI_OPCODE_SYNC_CACHE_10  0x35
 
 #define MSC_VENDOR   "PicoRCM "
@@ -40,7 +40,7 @@ void tud_msc_capacity_cb(uint8_t lun, uint32_t *block_count, uint16_t *block_siz
     *block_size  = DISK_BLOCK_SIZE;
 }
 
-// L'eject dell'host e' il momento piu' affidabile per committare.
+// The host's eject is the most reliable moment to commit.
 bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition,
                            bool start, bool load_eject) {
     (void)lun; (void)power_condition;
@@ -77,7 +77,7 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16],
     (void)lun; (void)buffer; (void)bufsize;
     switch (scsi_cmd[0]) {
         case SCSI_OPCODE_SYNC_CACHE_10:
-            // L'host ha finito di scrivere: e' il segnale che aspettavamo.
+            // The host has finished writing: this is the signal we wanted.
             storage_request_flush();
             return 0;
         default:

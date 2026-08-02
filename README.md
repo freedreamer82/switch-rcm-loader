@@ -146,15 +146,18 @@ only thing standing between your payload and some random USB stick.
 The LED is the whole interface — powered from a phone or a power bank there is
 no serial console, and the USB port belongs to the target.
 
+In DEVICE mode it always blinks. In HOST mode **on means armed, off means the
+payload went out, blinking means trouble** — with the target in your hand the
+only thing you need to read at a glance is "the light went out, it's done".
+
 | Pattern | Meaning |
 |---|---|
 | 3 quick flashes at power-on | firmware is running, before any USB |
-| slow pulse, ~2 s apart | DEVICE mode, drive is mountable and idle |
-| fast flicker | writing — **do not unplug** |
-| single flash per second | HOST mode, waiting for a target |
-| double flash | a device is attached but its VID/PID is not APX — ignored |
-| solid on | sending |
-| long on, brief off | done |
+| blinking, 1 Hz | DEVICE mode, drive is mountable and idle |
+| blinking, 5 Hz | DEVICE mode, writing — **do not unplug** |
+| solid on | HOST mode, armed and waiting for the target |
+| **off** | HOST mode, payload sent |
+| blinking, ~1.7 Hz | HOST mode, a device is attached but its VID/PID is not APX — ignored |
 | rapid continuous blinking | error |
 
 ---

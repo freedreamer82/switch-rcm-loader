@@ -28,7 +28,11 @@ set(PICO_BOARD pico CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(switch-rpm-loader C CXX ASM)
+# Il nome del progetto DEVE combaciare col nome del target add_executable
+# (pico_rcm): l'estensione VS Code ricava il binario da flashare con la regex
+# /project\(([^)\s]+)/ e cerca build/<nome>.elf . Se i due nomi divergono,
+# "Run Project" passa a picotool un path che non esiste.
+project(pico_rcm C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
