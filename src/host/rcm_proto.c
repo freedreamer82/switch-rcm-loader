@@ -189,7 +189,7 @@ bool rcm_proto_inject(void) {
     } else {
         printf("[rcm] device ID not read: aborting\n");
         status_error(rcm_last_bulk_fault() == BULK_TIMEOUT
-                     ? ERR_DEVID_TIMEOUT : ERR_DEVID_OTHER);
+                     ? ERR_TARGET : ERR_TARGET);
         return false;
     }
 #endif
@@ -197,14 +197,14 @@ bool rcm_proto_inject(void) {
     // ---- 2. payload from the FAT12 in flash
     if (f_mount(&fs, "", 1) != FR_OK) {
         printf("[rcm] FAT mount failed\n");
-        status_error(ERR_FAT_MOUNT);
+        status_error(ERR_PAYLOAD);
         return false;
     }
 
     FIL fp;
     if (f_open(&fp, PAYLOAD_FILENAME, FA_READ) != FR_OK) {
         printf("[rcm] %s not found\n", PAYLOAD_FILENAME);
-        status_error(ERR_NO_PAYLOAD);
+        status_error(ERR_PAYLOAD);
         f_unmount("");
         return false;
     }
@@ -212,7 +212,7 @@ bool rcm_proto_inject(void) {
     uint32_t payload_size = (uint32_t)f_size(&fp);
     if (payload_size == 0) {
         printf("[rcm] payload is empty\n");
-        status_error(ERR_PAYLOAD_EMPTY);
+        status_error(ERR_PAYLOAD);
         f_close(&fp);
         f_unmount("");
         return false;
@@ -226,7 +226,7 @@ bool rcm_proto_inject(void) {
                "(IRAM ends at 0x%08x)\n",
                (unsigned long)payload_size, (unsigned long)RCM_PAYLOAD_MAX,
                RCM_IRAM_END);
-        status_error(ERR_PAYLOAD_BIG);
+        status_error(ERR_PAYLOAD);
         f_close(&fp);
         f_unmount("");
         return false;
@@ -249,7 +249,7 @@ bool rcm_proto_inject(void) {
     //         copy lands on the right one. If we are even, one extra
     //         padding packet puts it back.
     if ((packets_sent % 2u) != 1u) {
-        if (!wr_flush()) { status_error(ERR_BULK); return false; }
+        if (!wr_flush()) { status_error(ERR_TARGET); return false; }
     }
     printf("[rcm] %lu packets of 0x%x sent\n",
            (unsigned long)packets_sent, RCM_CHUNK_SIZE);
@@ -293,17 +293,13 @@ fail:
     // Failing on the very first packet and dying halfway through are two
     // different faults, and without a serial cable the LED is the only way
     // to tell them apart.
-    if (packets_sent != 0u) {
-        status_error(ERR_BULK);
-    } else {
-        switch (rcm_last_bulk_fault()) {
-        case BULK_NO_EP:    status_error(ERR_BULK_NO_EP);    break;
-        case BULK_REJECTED: status_error(ERR_BULK_REJECTED); break;
-        case BULK_TIMEOUT:  status_error(ERR_BULK_TIMEOUT);  break;
-        case BULK_XFER_ERR: status_error(ERR_BULK_XFERERR);  break;
-        default:            status_error(ERR_BULK_FIRST);    break;
-        }
+    if (packets_sent == 0u) {
+        static const char *why[] = { "ok", "endpoint not open",
+                                     "transfer refused", "timed out",
+                                     "transfer error" };
+        printf("[rcm] first packet: %s\n", why[rcm_last_bulk_fault()]);
     }
+    status_error(ERR_TARGET);
     f_close(&fp);
     f_unmount("");
     return false;

@@ -90,7 +90,7 @@ static bool open_bulk_endpoints(uint8_t addr) {
     if (tuh_descriptor_get_configuration_sync(addr, 0, cfg_buf, sizeof(cfg_buf))
         != XFER_RESULT_SUCCESS) {
         printf("[host] failed to read the configuration descriptor\n");
-        status_error(ERR_CFG_DESC);
+        status_error(ERR_TARGET);
         return false;
     }
 
@@ -123,7 +123,7 @@ static bool open_bulk_endpoints(uint8_t addr) {
 
     if (!d_out || !d_in) {
         printf("[host] no bulk IN+OUT pair in the descriptor\n");
-        status_error(ERR_NO_BULK_EPS);
+        status_error(ERR_TARGET);
         return false;
     }
 
@@ -161,7 +161,7 @@ void tuh_mount_cb(uint8_t addr) {
     if (!open_bulk_endpoints(addr)) {
         printf("[host] endpoint setup failed\n");
         state = H_FAILED;
-        status_error(ERR_ENDPOINTS);
+        status_error(ERR_TARGET);
         return;
     }
     // A settling pause before the first transfer. The mount callback runs

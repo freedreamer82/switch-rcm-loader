@@ -28,7 +28,7 @@
 static void run_device_mode(void) {
     storage_init();
     if (!fs_ensure_formatted()) {
-        status_error(ERR_FS_FORMAT);
+        status_error(ERR_PAYLOAD);
         while (true) status_task();
     }
     tud_init(BOARD_TUD_RHPORT);

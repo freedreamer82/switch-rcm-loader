@@ -45,7 +45,7 @@ filesystem is FAT12 with long filenames disabled, so:
 So if you downloaded `hekate_ctcaer_6.2.0.bin`, **rename it**. A name that
 does not fit 8.3 gets stored with a mangled short name like `HEKATE~1.BIN`,
 and the firmware will not find it. The symptom is the error LED with
-`[rcm] payload.bin non trovato` on the serial log.
+`[rcm] payload.bin not found` on the serial log.
 
 Case is the one thing you do not have to think about. FAT stores short
 directory entries uppercase, and FatFs uppercases the name it searches for
@@ -195,43 +195,31 @@ only thing you need to read at a glance is "the light went out, it's done".
 | solid on | HOST mode, armed and waiting for the target |
 | **off** | HOST mode, payload sent |
 | blinking, ~1.7 Hz | HOST mode, a device is attached but its VID/PID is not APX — ignored |
-| N flashes, pause, repeat | error N, see below |
+| N flashes, pause, repeat | error class N, see below |
 
 ### Error codes
 
 On failure the LED blinks out the cause: **N flashes of 200 ms, then a
 one-second gap**, forever. Count the flashes.
 
-| N | Cause |
-|---|---|
-| 1 | the FAT could not be created at boot |
-| 2 | `f_mount` failed in host mode |
-| 3 | `payload.bin` not found |
-| 4 | `payload.bin` is zero bytes |
-| 5 | `payload.bin` is over the payload ceiling |
-| 6 | a bulk OUT failed or timed out **mid-send** |
-| 7 | the target rejected the trigger — the overflow did not happen |
-| 8 | `tuh_edpt_open` failed on the bulk endpoints |
-| 9 | the **first** bulk OUT failed, cause not narrowed down |
-| 10 | the OUT endpoint was never opened |
-| 11 | `tuh_edpt_xfer` refused to start the transfer |
-| 12 | the transfer started and never completed |
-| 13 | the transfer completed with a non-SUCCESS result |
-| 14 | the device-ID read timed out |
-| 15 | the device-ID read was rejected or errored |
-| 16 | the configuration descriptor could not be read |
-| 17 | no bulk IN+OUT pair in the descriptor |
+| N | Meaning | What to do |
+|---|---|---|
+| 1 | the filesystem or `payload.bin` | re-copy the payload in DEVICE mode |
+| 2 | the target is not talking | check the cable, that RCM is really engaged, re-seat |
+| 3 | the console refused the trigger | everything worked; the bootROM is probably patched |
+| 4 | internal state that should not happen | report it |
 
-Codes 10–13 exist because "the first packet failed" is three different
-faults wearing the same face, and with no serial cable attached the blink
-count is the only way to tell them apart.
+Only four on purpose. Past five or six flashes nobody counts reliably, and
+the LED's job is to tell you what to **do**, not which line returned false.
+The precise reason is always printed on the UART, which is where detail
+belongs.
 
-Note that **7 is not the same kind of failure as the others**: everything
-worked up to the last request, and the target refused it. A *timeout* on that
+Note that **3 is not the same kind of failure as the others**: everything
+worked up to the last request and the target refused it. A *timeout* on that
 same request is not an error at all — it is the normal outcome of a
 successful injection, and it gives you "off", not a blink.
 
-Code **12 in particular has a trap behind it.** Every non-control transfer in
+Class **2 has a trap behind it worth knowing.** Every non-control transfer in
 this firmware goes through `tuh_edpt_xfer()` with our own completion
 callback, and TinyUSB compiles that entire path out unless
 `CFG_TUH_API_EDPT_XFER` is 1 — which is *not* the default. With it at 0 the
