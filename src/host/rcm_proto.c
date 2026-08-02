@@ -21,13 +21,14 @@
 #include <pico/stdlib.h>
 #include "ff.h"
 #include "config.h"
+#include "status.h"
 #include "storage/flash_fat.h"
 #include "rcm_host.h"
 #include "rcm_proto.h"
 
 #define FILE_READ_CHUNK     512u
 #define BULK_TIMEOUT_MS      2000u
-#define DEVICE_ID_TIMEOUT_MS 1000u
+#define DEVICE_ID_TIMEOUT_MS 3000u
 #define TRIGGER_TIMEOUT_MS   5000u
 
 /*
@@ -175,35 +176,43 @@ static bool send_payload(FIL *fp) {
 // ------------------------------------------------------- sequence
 
 bool rcm_proto_inject(void) {
-    // ---- 1. is the target answering? The device ID is the first thing the
-    //         bootrom puts on the IN endpoint. If it does not arrive we say
-    //         so and try anyway: some targets deliver it late and the
-    //         injection still succeeds.
+    // ---- 1. the device ID, only if asked for. Off by default: on the
+    //         RP2040 bulk IN and bulk OUT share one hardware endpoint and a
+    //         timeout here cannot be cancelled, which would wedge the very
+    //         first packet of the payload. See RCM_READ_DEVICE_ID.
+#if RCM_READ_DEVICE_ID
     uint8_t device_id[RCM_DEVICE_ID_LEN];
     if (rcm_bulk_in(device_id, sizeof(device_id), DEVICE_ID_TIMEOUT_MS)) {
         printf("[rcm] device ID:");
         for (unsigned i = 0; i < sizeof(device_id); i++) printf(" %02x", device_id[i]);
         printf("\n");
     } else {
-        printf("[rcm] device ID non letto - continuo comunque\n");
+        printf("[rcm] device ID not read: aborting\n");
+        status_error(rcm_last_bulk_fault() == BULK_TIMEOUT
+                     ? ERR_DEVID_TIMEOUT : ERR_DEVID_OTHER);
+        return false;
     }
+#endif
 
     // ---- 2. payload from the FAT12 in flash
     if (f_mount(&fs, "", 1) != FR_OK) {
-        printf("[rcm] mount FAT fallito\n");
+        printf("[rcm] FAT mount failed\n");
+        status_error(ERR_FAT_MOUNT);
         return false;
     }
 
     FIL fp;
     if (f_open(&fp, PAYLOAD_FILENAME, FA_READ) != FR_OK) {
-        printf("[rcm] %s non trovato\n", PAYLOAD_FILENAME);
+        printf("[rcm] %s not found\n", PAYLOAD_FILENAME);
+        status_error(ERR_NO_PAYLOAD);
         f_unmount("");
         return false;
     }
 
     uint32_t payload_size = (uint32_t)f_size(&fp);
     if (payload_size == 0) {
-        printf("[rcm] payload vuoto\n");
+        printf("[rcm] payload is empty\n");
+        status_error(ERR_PAYLOAD_EMPTY);
         f_close(&fp);
         f_unmount("");
         return false;
@@ -213,15 +222,16 @@ bool rcm_proto_inject(void) {
     // larger payload cannot work under any circumstances, so it is better
     // said here than left to become a timeout on a bulk OUT halfway through.
     if (payload_size > RCM_PAYLOAD_MAX) {
-        printf("[rcm] payload troppo grande: %lu byte, il tetto e' %lu "
-               "(soffitto IRAM a 0x%08x)\n",
+        printf("[rcm] payload too large: %lu bytes, the ceiling is %lu "
+               "(IRAM ends at 0x%08x)\n",
                (unsigned long)payload_size, (unsigned long)RCM_PAYLOAD_MAX,
                RCM_IRAM_END);
+        status_error(ERR_PAYLOAD_BIG);
         f_close(&fp);
         f_unmount("");
         return false;
     }
-    printf("[rcm] payload %lu byte\n", (unsigned long)payload_size);
+    printf("[rcm] payload %lu bytes\n", (unsigned long)payload_size);
 
     // ---- 3. building the message, streamed
     wr_reset();
@@ -239,9 +249,9 @@ bool rcm_proto_inject(void) {
     //         copy lands on the right one. If we are even, one extra
     //         padding packet puts it back.
     if ((packets_sent % 2u) != 1u) {
-        if (!wr_flush()) return false;
+        if (!wr_flush()) { status_error(ERR_BULK); return false; }
     }
-    printf("[rcm] %lu pacchetti da 0x%x spediti\n",
+    printf("[rcm] %lu packets of 0x%x sent\n",
            (unsigned long)packets_sent, RCM_CHUNK_SIZE);
 
     // ---- 5. the trigger, awaited.
@@ -269,7 +279,8 @@ bool rcm_proto_inject(void) {
     printf("[rcm] trigger: %s\n", rcm_xfer_name(trig));
 
     if (trig == RCM_XFER_STALLED || trig == RCM_XFER_FAILED) {
-        printf("[rcm] il target ha respinto il trigger: exploit non innescato\n");
+        printf("[rcm] the target rejected the trigger: the exploit did not fire\n");
+        status_error(ERR_TRIGGER);
         return false;
     }
 
@@ -277,8 +288,22 @@ bool rcm_proto_inject(void) {
     return true;
 
 fail:
-    printf("[rcm] transfer fallito dopo %lu pacchetti\n",
+    printf("[rcm] transfer failed after %lu packets\n",
            (unsigned long)packets_sent);
+    // Failing on the very first packet and dying halfway through are two
+    // different faults, and without a serial cable the LED is the only way
+    // to tell them apart.
+    if (packets_sent != 0u) {
+        status_error(ERR_BULK);
+    } else {
+        switch (rcm_last_bulk_fault()) {
+        case BULK_NO_EP:    status_error(ERR_BULK_NO_EP);    break;
+        case BULK_REJECTED: status_error(ERR_BULK_REJECTED); break;
+        case BULK_TIMEOUT:  status_error(ERR_BULK_TIMEOUT);  break;
+        case BULK_XFER_ERR: status_error(ERR_BULK_XFERERR);  break;
+        default:            status_error(ERR_BULK_FIRST);    break;
+        }
+    }
     f_close(&fp);
     f_unmount("");
     return false;

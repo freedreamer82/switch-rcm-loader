@@ -42,6 +42,24 @@
 #define CFG_TUD_MSC_EP_BUFSIZE    4096
 
 // ---------------------------------------------------------- host
+
+// MANDATORY here, and it defaults to 0.
+//
+// The APX bootrom is vendor-specific, so no class driver owns its endpoints
+// and every bulk transfer goes through tuh_edpt_xfer() with our own
+// completion callback. That whole path is compiled out unless this is 1:
+// usbh.c does not even declare the ep_callback array (line ~135), does not
+// store the callback in tuh_edpt_xfer() (~916), and does not invoke it when
+// the transfer completes (~561).
+//
+// With it at 0 the failure is silent and thoroughly misleading: the transfer
+// really happens, the data really lands in the endpoint buffer, the bus
+// reports no error - and the stack simply never tells you. It looks exactly
+// like a target that will not answer. Control transfers keep working the
+// whole time, because those take the epnum == 0 branch, which is always
+// compiled in.
+#define CFG_TUH_API_EDPT_XFER     1
+
 #define CFG_TUH_ENUMERATION_BUFSIZE 256
 #define CFG_TUH_HUB               0    // no hubs: direct connection
 #define CFG_TUH_CDC               0

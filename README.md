@@ -195,7 +195,51 @@ only thing you need to read at a glance is "the light went out, it's done".
 | solid on | HOST mode, armed and waiting for the target |
 | **off** | HOST mode, payload sent |
 | blinking, ~1.7 Hz | HOST mode, a device is attached but its VID/PID is not APX — ignored |
-| rapid continuous blinking | error |
+| N flashes, pause, repeat | error N, see below |
+
+### Error codes
+
+On failure the LED blinks out the cause: **N flashes of 200 ms, then a
+one-second gap**, forever. Count the flashes.
+
+| N | Cause |
+|---|---|
+| 1 | the FAT could not be created at boot |
+| 2 | `f_mount` failed in host mode |
+| 3 | `payload.bin` not found |
+| 4 | `payload.bin` is zero bytes |
+| 5 | `payload.bin` is over the payload ceiling |
+| 6 | a bulk OUT failed or timed out **mid-send** |
+| 7 | the target rejected the trigger — the overflow did not happen |
+| 8 | `tuh_edpt_open` failed on the bulk endpoints |
+| 9 | the **first** bulk OUT failed, cause not narrowed down |
+| 10 | the OUT endpoint was never opened |
+| 11 | `tuh_edpt_xfer` refused to start the transfer |
+| 12 | the transfer started and never completed |
+| 13 | the transfer completed with a non-SUCCESS result |
+| 14 | the device-ID read timed out |
+| 15 | the device-ID read was rejected or errored |
+| 16 | the configuration descriptor could not be read |
+| 17 | no bulk IN+OUT pair in the descriptor |
+
+Codes 10–13 exist because "the first packet failed" is three different
+faults wearing the same face, and with no serial cable attached the blink
+count is the only way to tell them apart.
+
+Note that **7 is not the same kind of failure as the others**: everything
+worked up to the last request, and the target refused it. A *timeout* on that
+same request is not an error at all — it is the normal outcome of a
+successful injection, and it gives you "off", not a blink.
+
+Code **12 in particular has a trap behind it.** Every non-control transfer in
+this firmware goes through `tuh_edpt_xfer()` with our own completion
+callback, and TinyUSB compiles that entire path out unless
+`CFG_TUH_API_EDPT_XFER` is 1 — which is *not* the default. With it at 0 the
+transfer physically happens, the data lands in the endpoint buffer, the bus
+reports no error, and the stack never tells you. It looks precisely like a
+target that will not answer, while control transfers keep working throughout
+because those take a different branch. It is set in
+[tusb_config.h](tusb_config.h); do not remove it.
 
 ---
 
@@ -276,21 +320,25 @@ The only definitive verdict is still the target's screen.
 
 ## Building
 
-Needs the Pico SDK (2.3.0) and FatFs, which is not vendored:
+The only thing you need is the **Pico SDK 2.3.0**. Nothing else to fetch:
 
-1. Download FatFs from <http://elm-chan.org/fsw/ff/>
-2. Extract into `lib/fatfs/` so that `lib/fatfs/source/ff.c` exists
-3. Configure `lib/fatfs/source/ffconf.h` — see [FATFS_SETUP.md](FATFS_SETUP.md)
-
-Do not put an `ffconf.h` in the project root. `ff.h` checks `FFCONF_DEF`
-against its own release and rejects a config file from a different one; the
-root copy wins on the include path and you get `#error Wrong configuration
-file`. CMake fails the configure step with an explanation if it finds one.
+- **FatFs** is vendored in [lib/fatfs/](lib/fatfs/), already configured.
+- **TinyUSB** ships with the Pico SDK — both the device and the host stack.
 
 ```sh
 cmake -B build -G Ninja
 ninja -C build
 ```
+
+Two things about `ffconf.h` if you ever update FatFs. It must be the one from
+the package you extracted, because `ff.h` checks `FFCONF_DEF` against its own
+release and rejects a config file from a different one. And it must stay in
+`lib/fatfs/source/` — a copy in the project root wins on the include path and
+gives you `#error Wrong configuration file`. CMake fails the configure step
+with an explanation in both cases.
+
+`FF_USE_LFN` is **0**, so filenames are 8.3 only. `payload.bin` fits; a long
+name simply cannot be opened.
 
 Output is `build/pico_rcm.uf2`. Hold BOOTSEL, plug in, drop the file on the
 `RPI-RP2` drive.

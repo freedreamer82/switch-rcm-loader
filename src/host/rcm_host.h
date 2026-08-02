@@ -33,6 +33,18 @@ rcm_xfer_t rcm_control_out(uint8_t bmRequestType, uint8_t bRequest,
                            uint16_t wValue, uint16_t wIndex, uint16_t wLength,
                            uint32_t timeout_ms);
 
+// Why the last bulk transfer failed. Set by rcm_bulk_out/rcm_bulk_in on
+// every call, so the caller can report something more useful than "failed".
+typedef enum {
+    BULK_OK = 0,
+    BULK_NO_EP,      // the endpoint was never opened
+    BULK_REJECTED,   // tuh_edpt_xfer refused to start it
+    BULK_TIMEOUT,    // started, no completion within the timeout
+    BULK_XFER_ERR,   // completed, but the result was not SUCCESS
+} rcm_bulk_fault_t;
+
+rcm_bulk_fault_t rcm_last_bulk_fault(void);
+
 uint8_t rcm_dev_addr(void);
 
 #endif

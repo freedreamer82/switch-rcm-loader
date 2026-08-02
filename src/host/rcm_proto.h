@@ -77,6 +77,39 @@
 // routes reach the same number, which is a good sign the number is right.
 #define RCM_PAYLOAD_MAX   (RCM_MAX_MSG_LEN - RCM_PREFIX_SIZE)
 
+/*
+ * Read the 16-byte device ID before injecting? Default OFF, and that is not
+ * timidity.
+ *
+ * In host mode the RP2040 has ONE hardware endpoint for all non-interrupt
+ * transfers - "Host mode uses one shared endpoint register for non-interrupt
+ * endpoint", hcd_rp2040.c, where EPX is ep_pool[0]. Bulk IN and bulk OUT
+ * take turns on it. And hcd_edpt_abort_xfer() is "TODO not implemented yet"
+ * on this port: it returns false and cancels nothing.
+ *
+ * Put those two together and an optional read that times out is not
+ * harmless - it leaves EPX claimed with no way to release it, and the first
+ * bulk OUT of the payload then fails to claim the endpoint. The injection
+ * dies before a single byte goes out, because of a transfer we did not even
+ * need.
+ *
+ * Back ON, though: fusee-launcher reads those 16 bytes BEFORE writing the
+ * message, so the read is part of the protocol order rather than a
+ * convenience. A bootrom that will not accept the payload until its ID has
+ * been collected looks exactly like a bulk OUT that NAKs forever.
+ *
+ * It is fatal now. If the read fails there is no point streaming 180 KB into
+ * a target that is not listening, and the failure itself is the diagnosis.
+ */
+// Pause between the target being latched and the first bulk transfer.
+#ifndef RCM_SETTLE_MS
+#define RCM_SETTLE_MS 250u
+#endif
+
+#ifndef RCM_READ_DEVICE_ID
+#define RCM_READ_DEVICE_ID 1
+#endif
+
 // Runs the whole sequence: reads payload.bin from the FAT12 in flash and
 // streams it out. Returns false if the file is missing, too large, or a
 // transfer fails.
