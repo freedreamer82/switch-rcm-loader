@@ -94,20 +94,22 @@ that is why the delay exists.
 
 ## Wiring
 
-```
-Pico                          Switch
-────                          ──────
-USB port  ───────────────────  USB-C  (data + VBUS)
+### Mode jumper
 
-GPIO15  ──┐
-          │  jumper           closed  = HOST mode  (inject)
-GND     ──┘                   open    = DEVICE mode (USB drive)
+`MODE_PIN` is **GPIO14**, which is **physical pin 19**. The GND next to it is
+**physical pin 18**, so a plain 2-way jumper selects the role:
+
+```
+   pin 17   GP13
+   pin 18   GND    ──┐  jumper closed = HOST mode   (inject)
+   pin 19   GP14  ───┘  jumper open   = DEVICE mode (USB drive)
+   pin 20   GP15
 ```
 
-`GPIO15` is a second contact **mechanically coupled to the power jumper**.
-Pin 40 (VBUS) is not readable by software on the RP2040, so the firmware
-cannot see the real power jumper — it reads this one instead, and you wire
-the two so they move together.
+Solder a 3-pin header across **18-19-20** and the jumper has somewhere to
+live in both positions: on **18-19** it selects HOST, parked on **19-20** it
+selects DEVICE and does not get lost. GP15 is unused by the firmware, so
+parking there is electrically harmless.
 
 The default is fail-safe: **contact open means DEVICE mode.** Forget the
 jumper and the result is "sent nothing", not "sent a payload into an unknown
@@ -117,6 +119,41 @@ exactly the failure you do not want to get wrong.
 
 The role is chosen once at boot and never changes — there is only one USB
 controller.
+
+### Data
+
+```
+Pico                          Switch
+────                          ──────
+USB port  ───────────────────  USB-C
+```
+
+In HOST mode the Pico's USB port belongs to the target. That is the whole
+port: you cannot also use it for power.
+
+### Power
+
+Being the USB *host* does not make the Pico the power *source* — on USB-C the
+data role and the power role are independent. The Pico could not source VBUS
+anyway: pin 40 is wired straight to the micro-USB connector as an **input**,
+through the on-board Schottky D1 to VSYS, and the RP2040 has no VBUS switch.
+And the Switch does not need it: it is self-powered.
+
+So the only question is what powers the Pico:
+
+- **From the target**, if its port supplies 5 V over the cable — plug in and
+  look for the three boot flashes;
+- **From a power bank**, otherwise. Cut a USB cable and use two wires:
+
+| wire | Pico pin |
+|---|---|
+| red (+5 V) | **39** (VSYS) |
+| black (GND) | **38** (GND) |
+
+Do **not** feed 5 V into pin 40 (VBUS): it is the micro-USB connector's VBUS,
+so an external supply there fights whatever is on the other end of the cable.
+VSYS sits behind D1, which conducts VBUS→VSYS only, so nothing is back-fed
+into the connector and no extra diode is needed. VSYS accepts 1.8–5.5 V.
 
 You also need the target's RCM jack pin shorted, the usual way. That part is
 outside the scope of this firmware.
@@ -128,7 +165,7 @@ outside the scope of this firmware.
 **1. Load the payload.** Jumper open, plug the Pico into a PC. A drive named
 `PICORCM` appears. Copy your payload as `payload.bin`. Eject.
 
-**2. Move the jumper** to closed (HOST).
+**2. Move the jumper** from 19-20 to **18-19** (HOST).
 
 **3. Put the Switch in RCM** and plug in the Pico. Injection starts by itself
 the moment the bootrom enumerates — there is no button. The trigger is the

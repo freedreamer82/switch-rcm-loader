@@ -1,6 +1,6 @@
 /*
- * usb_descriptors.c - descrittori per la sola modalita' DEVICE (MSC).
- * In host mode questi non vengono usati.
+ * usb_descriptors.c - descriptors for DEVICE mode (MSC) only.
+ * They are not used in host mode.
  */
 #include <tusb.h>
 
