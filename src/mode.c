@@ -7,6 +7,12 @@ run_mode_t mode_read(void) {
     gpio_set_dir(MODE_PIN, GPIO_IN);
     gpio_pull_up(MODE_PIN);
 
+    // See config.h: the park pin's reset state is a pull-down, so leaving it
+    // alone would make the parked cap read as a half level rather than open.
+    gpio_init(MODE_PARK_PIN);
+    gpio_set_dir(MODE_PARK_PIN, GPIO_IN);
+    gpio_pull_up(MODE_PARK_PIN);
+
     // The internal pull-up is weak (~50k): give it time to charge the
     // capacitance of the flying lead before sampling.
     sleep_ms(5);

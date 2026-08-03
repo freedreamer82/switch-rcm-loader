@@ -108,8 +108,15 @@ that is why the delay exists.
 
 Solder a 3-pin header across **18-19-20** and the jumper has somewhere to
 live in both positions: on **18-19** it selects HOST, parked on **19-20** it
-selects DEVICE and does not get lost. GP15 is unused by the firmware, so
-parking there is electrically harmless.
+selects DEVICE and does not get lost. The printed lid says which is which.
+
+Parking is only harmless because the firmware pulls **GP15 up** as well
+(`MODE_PARK_PIN`). A GPIO nobody touches keeps its reset state, and on RP2040
+that is `PADS_BANK0` with `PDE=1` — a 50k pull-*down*. Left like that, the cap
+parked on 19-20 would put GP14's 50k pull-up in series with it and hand the
+input roughly half of VDD, which is neither a one nor a zero: the board might
+come up in HOST mode with nothing plugged into it. With both pins pulled up,
+parking the cap really is an open circuit.
 
 The default is fail-safe: **contact open means DEVICE mode.** Forget the
 jumper and the result is "sent nothing", not "sent a payload into an unknown
@@ -403,4 +410,11 @@ src/
     diskio_flash.c    FatFs glue
     msc_device.c      USB mass storage callbacks
     fs_setup.c        first-boot format
+case/
+  base.stl            printable enclosure, see case/README.md
+  lid.stl
+  gland.stl           cable gland
+  remix.py            regenerates all three from the donor model
+  preview.scad        case + board + header + jig, for checking clearances
+  section.scad        cross-section through the jig rail slot
 ```

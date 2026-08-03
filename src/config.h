@@ -10,6 +10,17 @@
 //   closed to GND = HOST mode   (inject)
 //   open (internal pull-up) = DEVICE mode -> fail-safe
 #define MODE_PIN            14
+
+// GPIO15 is pin 20, and exists here only so the jumper cap has somewhere to
+// live when the role is DEVICE - solder a 3-way header on 18-19-20 and the
+// cap never has to come off the board.
+//
+// It has to be pulled up, and that is not cosmetic. A GPIO left alone keeps
+// its reset state, and on RP2040 that is PADS_BANK0 PDE=1: a 50k pull-DOWN.
+// Parked on 19-20 the cap would then put MODE_PIN's 50k pull-up in series
+// with it and hand the input half of VDD, which is neither level. Pulled up,
+// both ends of the cap are high and parking it is a genuine open.
+#define MODE_PARK_PIN       15
 #define STATUS_LED_PIN      PICO_DEFAULT_LED_PIN
 
 // ---------------------------------------------------------------- flash
