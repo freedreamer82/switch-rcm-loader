@@ -414,7 +414,6 @@ case/
   base.stl            printable enclosure, see case/README.md
   lid.stl
   gland.stl           cable gland
-  remix.py            regenerates all three from the donor model
-  preview.scad        case + board + header + jig, for checking clearances
-  section.scad        cross-section through the jig rail slot
+  build.py            builds all three from the donor model, checks them,
+                      and draws the section and the previews
 ```
