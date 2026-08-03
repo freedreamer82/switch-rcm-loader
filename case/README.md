@@ -1,5 +1,7 @@
 # Case
 
+See the scope and disclaimer notes in the [top-level README](../README.md).
+
 A remix of [Raspberry Pi Pico Case (1 & 2, Wireless)](https://www.printables.com/model/1368704)
 by nmattia, released CC0 — the mesh is embedded in `build.py`, which that
 licence allows and which is why the attribution is repeated at the blob. The snap fit, the USB mouth, the LED window and the

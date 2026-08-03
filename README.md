@@ -1,3 +1,8 @@
+<p align="center">
+  <img src="docs/logo.png" width="760"
+       alt="pico-rcm - Fusee Gelee payload injector on a Raspberry Pi Pico">
+</p>
+
 # pico-rcm
 
 An RCM payload injector for the Nintendo Switch, running on a Raspberry Pi
@@ -16,14 +21,57 @@ supply the file.
 
 ---
 
-## Requirements and scope
+## Scope, and what this is not
+
+Written as a study of two things: the Tegra recovery-mode protocol, and
+TinyUSB's dual-role stack on the RP2040. It is published for reference and for
+people who want to read how it works. Everything below is a statement of
+intent and of fact about the contents of this repository — it is not legal
+advice, and what is lawful depends on where you are.
+
+**Nothing of Nintendo's is here.** No bootrom dump, no keys, no console
+firmware, no game data, no decryption of anything. Nor any payload binary —
+not hekate, not Atmosphère, not a stub. `payload.bin` is a file *you* put on
+the drive, from wherever you got it. What this repository contains is a USB
+stack, a FAT12 volume in flash, and a 680-byte protocol header.
+
+**The vulnerability is public and old.** Fusée Gelée is CVE-2018-6242,
+disclosed by Kate Temkin and ReSwitched in 2018 and documented publicly ever
+since. This is an implementation of a published protocol on a €4
+microcontroller. It discloses nothing that was not already described in
+detail, and it defeats no protection that is still supported: the hole was
+closed in hardware years ago, which is why this only works on unpatched Erista
+units and cannot be made to work on anything newer.
+
+**On hardware you own.** The point of RCM injection here is to run your own
+code, and to recover a console you have made unbootable. Nothing else.
+
+**Not for piracy.** Nothing here circumvents copy protection, decrypts
+content, or helps run software you have not paid for. If that is what you
+wanted, this is the wrong project — and in most jurisdictions the wrong idea.
+
+**The consequences are yours.** Injecting a payload voids the warranty, can
+get the console and the account attached to it permanently banned from
+Nintendo's online services, and can leave the unit unbootable. Feeding a
+console an arbitrary binary over USB is exactly as dangerous as it sounds.
+Read what your payload does before you send it.
+
+**No affiliation.** Nintendo, Nintendo Switch, Joy-Con and Tegra are
+trademarks of their respective owners, used here only to say which hardware
+this talks to. This project is not affiliated with, authorised by, sponsored
+by or endorsed by Nintendo Co., Ltd. or NVIDIA.
+
+**No warranty.** Provided as is. If it bricks your console, your Pico, or your
+afternoon, that is on you.
+
+---
+
+## Hardware it works on
 
 This works only on Switch units whose bootrom is vulnerable to Fusée Gelée —
 unpatched Erista hardware. Patched units and Mariko simply will not respond,
 and the Pico will sit there blinking "waiting". There is nothing to configure
 for that case: it either enumerates as an APX device or it does not.
-
-Intended for homebrew on hardware you own.
 
 ---
 
@@ -390,6 +438,26 @@ found unreadable — FAT12, single FAT copy, 4 KB clusters matched to the flash
 erase sector. FatFs and the MSC device are never active at the same time by
 construction: formatting runs once before `tud_init()`, so concurrent access
 to the FAT is not a problem this project has to solve.
+
+---
+
+## Credits and provenance
+
+- **Fusée Gelée** was found and disclosed by Kate Temkin and ReSwitched in
+  2018 (CVE-2018-6242). The protocol this firmware speaks is theirs; the
+  reference implementations that came out of that work are what the header
+  layout here was checked against.
+- The **enclosure** is a remix of [Raspberry Pi Pico Case (1 & 2, Wireless)](https://www.printables.com/model/1368704)
+  by nmattia, released CC0. Details in [case/README.md](case/README.md).
+- The **jig profile** in `case/build.py` is measured off a printed Joy-Con RCM
+  jig. Dimensions only — no third-party model is included.
+- **A large part of this code, and of this documentation, was written with the
+  help of an AI coding assistant.** It is worth knowing when you read it: the
+  reasoning in the comments is real reasoning about real measurements, but it
+  was not all arrived at by a human at a bench. What *was* done at the bench is
+  the testing — every claim about behaviour here was checked against hardware
+  or against a numeric check that is in the repository and that you can run.
+  Where a claim rests on neither, it says so.
 
 ---
 
