@@ -145,18 +145,26 @@ that is why the delay exists.
 ### Mode jumper
 
 `MODE_PIN` is **GPIO14**, which is **physical pin 19**. The GND next to it is
-**physical pin 18**, so a plain 2-way jumper selects the role:
+**physical pin 18**. Solder a 3-pin header across **18-19-20** and one jumper
+cap selects the role, with somewhere to live in either position:
 
 ```
-   pin 17   GP13
-   pin 18   GND    ──┐  jumper closed = HOST mode   (inject)
-   pin 19   GP14  ───┘  jumper open   = DEVICE mode (USB drive)
-   pin 20   GP15
+        HOST  —  inject                DEVICE  —  USB drive
+
+   pin 18  GND   ──┐                pin 18  GND
+   pin 19  GP14  ──┘                pin 19  GP14  ──┐
+   pin 20  GP15                     pin 20  GP15  ──┘
+
+   cap on 18-19:                    cap on 19-20:
+   GP14 shorted to GND, reads 0     GP14 on its pull-up, reads 1
 ```
 
-Solder a 3-pin header across **18-19-20** and the jumper has somewhere to
-live in both positions: on **18-19** it selects HOST, parked on **19-20** it
-selects DEVICE and does not get lost. The printed lid says which is which.
+So **DEVICE mode is the cap parked across 19-20** — not the cap removed. Both
+work, because pin 20 is GP15 and nothing is connected to it, but parking it is
+the point of the third pin: the cap never comes off the board and cannot be
+lost. Taking it off entirely gives DEVICE mode too.
+
+The printed lid says which is which, engraved beside the window.
 
 Parking is only harmless because the firmware pulls **GP15 up** as well
 (`MODE_PARK_PIN`). A GPIO nobody touches keeps its reset state, and on RP2040
@@ -166,9 +174,10 @@ input roughly half of VDD, which is neither a one nor a zero: the board might
 come up in HOST mode with nothing plugged into it. With both pins pulled up,
 parking the cap really is an open circuit.
 
-The default is fail-safe: **contact open means DEVICE mode.** Forget the
-jumper and the result is "sent nothing", not "sent a payload into an unknown
-device". The pin is sampled 16 times and needs 14 agreeing reads
+The default is fail-safe: **anything other than a solid short to GND on pin 19
+means DEVICE mode** — parked, removed, half-seated, corroded. Forget the jumper
+and the result is "sent nothing", not "sent a payload into an unknown device".
+The pin is sampled 16 times and needs 14 agreeing reads
 ([mode.c](src/mode.c#L17)), because a half-inserted or oxidised jumper is
 exactly the failure you do not want to get wrong.
 
