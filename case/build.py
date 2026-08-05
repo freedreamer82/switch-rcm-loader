@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: CC0-1.0
 #
-# pico-rcm case: builds base.stl, lid.stl and gland.stl, and draws the
+# pico-rcm case: builds base.stl and lid.stl, and draws the
 # section that documents them. A remix of "Raspberry Pi Pico Case (1 & 2,
 # Wireless)" by nmattia, printables.com/model/1368704, released CC0.
 #
@@ -16,8 +16,8 @@
 #   3  a 4.5 mm cable pass-through at the end OPPOSITE the Pico's own USB.
 #   4  a shallow channel in the lid's inner face along the pin 21-40 row, so
 #      the power wires can run from VSYS/GND down to that pass-through.
-#   6  a gland, printed separately, that plugs the cable notch above the
-#      cable, cradles it and is trapped by the lid.
+#   6  a tongue on the lid that plugs the cable notch, beds down on the cable
+#      and holds it in the duct, plus four ribs that hold the board down.
 #   5  a rail slot under the floor for the Joy-Con jig, opening at the same
 #      end as the cable. It is the negative of the jig's own cross-section,
 #      so the jig slides in the way it slides into a Joy-Con and the profile
@@ -26,7 +26,7 @@
 #
 # Everything is measured off the source mesh, nothing is redrawn.
 #
-#   ./build.py            writes base.stl, lid.stl, gland.stl and the pictures
+#   ./build.py            writes base.stl, lid.stl and the pictures
 #   ./build.py --fast     skips the pictures, which are most of the runtime
 #
 # Coordinates: both halves are centred on x and y. The board lies in the
@@ -57,6 +57,53 @@ LID_FLIP_Z = 3.55                # z_base = LID_FLIP_Z - z_lid
 PAD_X = 9.0                      # centre of the castellation row
 SKIN = 0.6                       # material left under the closed slots
 
+# The stock castellation channel is 1.4 mm deep, and a printed board with
+# solder on the pads touches its floor. There is room to sink it now that the
+# jig slot has lowered the floor, so it goes down to here instead. The +x row
+# gets the cable duct, which is deeper still.
+TAIL_Z = -3.2
+
+# Nothing held the board down: the donor's locating pegs stop at z = 1.28,
+# which is 0.28 mm above a 1 mm board - enough to locate it, nothing to keep
+# it there, and 2.55 mm of clear air above. These are ribs on the lid that
+# land on the board. Thin on purpose: if the print comes out over size a
+# 0.9 mm blade deforms rather than holding the lid off its snap.
+#
+# Where they land took two goes. At |x| = 9.5 all four sat on the castellated
+# pads - the pad copper runs from the board edge to about 2.4 mm in, so
+# anything past |x| = 8.1 is on it - and one of them sat on pin 40, a pad
+# away from where the power cable gets soldered. At |x| = 7.0 they are inboard
+# of the copper and outboard of everything in the middle of the board.
+#
+# The y values are pad mid-gaps, but do not read anything into that: a rib is
+# 3.6 mm long and the pad pitch is 2.54, so it crosses a pad centre wherever
+# it is put. What keeps it off the copper is the x, and only the x.
+#
+# The y is mine, and constrained: the locating pegs occupy y +-22.45 to +-24.45
+# so a rib cannot sit on the mounting hole itself, the BOOTSEL flexure owns
+# y 8.5 to 17.9, the LED hole 20.9 to 22.5, and the jumper window everything
+# below -17 on the -x side. What is left is these four. The lid is checked for
+# solidity around each one, which is what caught the flexure.
+# Three plain blades - x, y, length. Nothing wraps anything and nothing is
+# squeezed in: a land built round the locating peg was tried and thrown out,
+# because a ring only has to be 0.1 mm oversize to stop seating, and a fourth
+# blade in the only bare gap left on the +y half - a two-millimetre window at
+# y +11 to +12 - was dropped rather than contrived. Better a support that is
+# not there than one in a place it does not belong.
+#
+# So the USB half of the board is held by its two locating pegs and by the
+# connector sitting in the case mouth, and these three do the rest. The board
+# scan is what says there is nowhere better: the -x/+y quadrant has no room at
+# all, because the BOOTSEL flexure owns y 8.5 to 17.9 of the lid and the LED
+# hole 20.9 to 22.5.
+HOLD_RIBS = ((5.7, -20.0, 3.6),
+             (-5.5, -20.0, 3.6),
+             (-5.5, -5.5, 3.6))
+HOLD_CLEAR = 0.80                # how far a rib must stay from any opening
+HOLD_W = 0.9                     # blade thickness
+BOARD_TOP = 1.0
+HOLD_BITE = 0.10                 # how far a rib presses into the board
+
 # Window over pins 18-19-20. The 20 pads are centred on the board, so
 # pin 20 sits at y = -24.13 and pin 18 at -19.05; the window spans from the
 # end wall to just short of pin 17.
@@ -78,49 +125,27 @@ WIN_R = 0.8                      # corner radius
 # the lid's rim on the way down, or the lid would need notching too.
 CABLE_X = PAD_X                  # over the pin 21-40 pads, mirrored below
 CABLE_W = 4.0                    # across the duct
-CABLE_D = 4.0                    # the cable itself
+CABLE_D = 3.0                    # the cable itself, over the jacket
 CABLE_Z0 = -CABLE_D - 0.2        # duct floor: the cable has to end up BELOW
                                  # the cavity floor or it lifts the board
 CABLE_Z1 = 0.05                  # duct roof under the board is the board
 CABLE_SLOT_TOP = JOINT_Z + 0.05  # the notch, open to the top of the base
 CABLE_END = CAV_Y - 1.0          # how far up the board the duct reaches
 LID_RIM_Z = 0.5                  # lowest the lid reaches at the end wall
-LID_RIM_Y = -27.15               # and how far out, measured off the lid
-GLAND_Z0 = -0.6                  # how far down the gland's skirts reach
-# The gland drops in from above, which is what makes a real lock possible:
-# the direction it would escape in is not the direction it goes in. A tooth
-# on its left flank descends a pocket in the notch wall, and once seated the
-# pocket's two faces block it fore and aft. No flexure needed - and none
-# would fit. Only the left flank: the right one is inside the corner radius
-# and a pocket there would leave 0.1 mm of outer wall.
-GLAND_TAB = 1.0                  # how far the tooth reaches into the wall
-GLAND_TAB_Y = (-27.4, -26.2)     # and where along the wall it sits
-# How much the cradle bites into the cable. This, not a latch on the lid, is
-# what makes the gland a strain relief: the tooth stops the gland moving, but
-# only friction stops the cable sliding through it. A cable jacket takes
-# 0.4 mm of squeeze without complaint.
-GLAND_PINCH = 0.4
-GLAND_TAB_Z0 = -1.8              # it hangs below the foot: that side of the
-                                 # notch is solid all the way down, so depth
-                                 # here is free, and depth is shear area
+CABLE_CLAMP = 0.20               # how far the tongue beds into the cable
+TONGUE_WRAP = 1.2                # how far its skirts reach past the crown
 
 # Outer profile of the case, measured off the source: a 26 x 56 rounded
 # rectangle, corner radius 2.5. The tray below the floor repeats it exactly.
 OUT_W, OUT_L, OUT_R = 26.0, 56.0, 2.5
 
-# The Joy-Con jig is not stored in a box, it is railed in the way the console
-# rails it: the slot is the negative of the jig's own cross-section. Measured
-# from the mesh below, so there is nothing to type in by hand and nothing to
-# get wrong - repack a different jig and the slot follows it.
+# The jig is a table of dimensions, not somebody else's model: width against
+# height off its own rail section, taken every place the section changes and
+# nowhere else. Faithful to +-0.04 mm, which is finer than a caliper on a
+# printed part resolves. Length and height come from the same measurement.
 #
-# The jig is a table of dimensions, not somebody else's model: half-width
-# against height off its own rail profile, taken every place the section
-# changes and nowhere else. Faithful to +-0.04 mm, which is finer than a
-# caliper on a printed part resolves. Length and height come from the same
-# measurement.
-#
-# JIG_LEN is along the slot, JIG_PROFILE is the cross-section. The profile is
-# symmetric to 0.008 mm, so it is stored as full widths about the centre.
+# JIG_LEN is along the slot, JIG_PROFILE is the cross-section, symmetric to
+# 0.008 mm and so stored as full widths about the centre.
 JIG_LEN = 20.00
 JIG_PROFILE = (
     (0.00, 8.69),                # break on the bottom edge of the flange
@@ -153,13 +178,16 @@ JIG_PROFILE = (
 #
 # It goes in upside down, which is what retains it: the 9.70 chamber ends up
 # buried and the mouth at the open underside is only 7.70, narrower than the
-# 9.09 flange. Nothing holds it fore-and-aft but friction and one detent.
-JIG_X = -3.0                     # off centre: the cable duct wants the
-                                 # other side of the floor
+# 9.09 flange.
+JIG_X = -1.0                     # off centre, but only just: the cable duct
+                                 # wants one side of the floor and the
+                                 # deepened pin-tail channel the other, and
+                                 # the slot has to leave a wall between
 JIG_FLANGE_W = 9.70              # RCM_Holder_v1.stl, scaled 1/10
 JIG_TONGUE_W = 7.70
 JIG_ROOF = 0.20                  # slack over the tip
 JIG_LEAD = 0.5                   # slack at the far end of the slot
+
 # Two bumps in the flange chamber, a few mm inside the mouth. They are what
 # stops the jig sliding straight back out: the slot is horizontal and open at
 # one end, and 0.3 mm a side of clearance does not hold anything by friction.
@@ -211,6 +239,57 @@ def unpack(text):
     return trimesh.Trimesh(np.cumsum(a.astype(np.int64), axis=0) / MESH_GRID,
                            np.cumsum(b.astype(np.int64), axis=0),
                            process=False)
+
+
+# What stands on top of a Pico, measured off a scan of the board and reduced to
+# a table - a 1 mm grid of the tallest thing in each cell, '.' for bare board.
+# Rows run from the USB end down, columns from the pin 1-20 edge across. It is
+# deliberately conservative: a cell is marked if a component touches any part
+# of it, so the keep-out is slightly larger than the truth.
+#
+# This replaces a hand-written list of component boxes that was wrong twice,
+# once by 2 mm. It is measurements, not somebody's model.
+BOARD_KEEPOUT = (
+    '......333333333......', '......333333333......',
+    '......333333333......', '......333333333......',
+    '...111333333333.1....', '...111...111...111...',
+    '.......11....11111...', '.......11...111111...',
+    '............111.1....', '.....2222..1111222...',
+    '.....3333..1111222...', '.....3333..1111222...',
+    '.....3333...111222...', '.....3333...111......',
+    '.....2222............', '..............1111...',
+    '.....11.......1111...', '....1111......1111...',
+    '....1111........11...', '....1111........11...',
+    '....1111.111111111...', '.........111111111...',
+    '......1111111111.....', '.....11111111111.....',
+    '......111111111......', '......111111111111...',
+    '.....1111111111111...', '.....11111111111.....',
+    '......111111111......', '......11111111.......',
+    '..........11.........', '..........11.........',
+    '........111..........', '......11111..........',
+    '.....111111..........', '.....11111...........',
+    '.....................', '.....................',
+    '.....................', '.....................',
+    '.....................', '.....................',
+    '.....................', '.....................',
+    '.....................', '.....................',
+    '.....................', '.....................',
+    '.....................', '.....................',
+    '.....................',
+)
+
+
+def board_clear(x0, x1, y0, y1):
+    """Is every cell of BOARD_KEEPOUT under this footprint bare board?"""
+    for j, row in enumerate(BOARD_KEEPOUT):
+        cy0, cy1 = 24.5 - j, 25.5 - j
+        if cy1 <= y0 or cy0 >= y1:
+            continue
+        for i, ch in enumerate(row):
+            cx0, cx1 = -10.5 + i, -9.5 + i
+            if cx1 > x0 and cx0 < x1 and ch != '.':
+                return False, (cx0 + 0.5, cy0 + 0.5, ch)
+    return True, None
 
 
 def rrect(x0, x1, y0, y1, z0, z1, r):
@@ -350,6 +429,11 @@ def make_base(src):
                    prism(OUT_W - 3, OUT_L - 3, OUT_R - 1.5, FLOOR_Z0 - 0.1, -0.2),
                    slab(-6.0, 6.0, 26.0, 29.0, FLOOR_Z0 - 0.1, -0.2)))
 
+    # 2b. Sink the pin-tail channel on the pin 1-20 row. The jig slot is
+    #     1.6 mm clear of it in x, which is the whole reason JIG_X moved.
+    out = D(out, slab(-SLOT_X1 - 0.05, -SLOT_X0 + 0.05, -CAV_Y, CAV_Y,
+                      TAIL_Z, 0.05))
+
     # 3. Cable entry and the duct it feeds, in one cut: a slot through the
     #    end wall that carries on under the board. Open upwards into the
     #    cavity for its whole length, so the only thing to bridge is the
@@ -358,12 +442,8 @@ def make_base(src):
     out = D(out, rrect(CABLE_X - cw, CABLE_X + cw,
                        -OUT_L / 2 - 1.0, CABLE_END, CABLE_Z0, CABLE_Z1, 1.0),
                  slab(CABLE_X - cw, CABLE_X + cw,
-                      -OUT_L / 2 - 1.0, -CAV_Y + 0.45, CABLE_Z0, CABLE_SLOT_TOP),
-                 # pocket for the gland's tooth, open to the top so the
-                 # tooth can be lowered into it
-                 slab(CABLE_X - cw - GLAND_TAB, CABLE_X - cw,
-                      GLAND_TAB_Y[0], GLAND_TAB_Y[1],
-                      GLAND_TAB_Z0 - 0.1, CABLE_SLOT_TOP))
+                      -OUT_L / 2 - 1.0, -CAV_Y + 0.45, CABLE_Z0,
+                      CABLE_SLOT_TOP))
 
     #    The rail slot, opening at the cable end. Both openings are in that
     #    face but 2 mm apart in z, so they never meet.
@@ -386,7 +466,10 @@ def make_base(src):
 # is polylines in a 0..1 box, stroked with round-ended capsules so the joins
 # come out clean.
 GLYPHS = {
-    'P': [[(0, 0), (0, 1), (1, 1), (1, .5), (0, .5)]],
+    # The P's bowl is deliberately shallow: at a 1 mm stroke and this cap
+    # height a half-height bowl leaves 0.5 mm of raised material inside it,
+    # which a 0.6 nozzle turns to mush. At 0.35 it leaves 1.47 mm.
+    'P': [[(0, 0), (0, 1), (1, 1), (1, .35), (0, .35)]],
     'C': [[(1, 1), (0, 1), (0, 0), (1, 0)]],
     'S': [[(1, 1), (0, 1), (0, .5), (1, .5), (1, 0), (0, 0)]],
     'W': [[(0, 1), (.2, 0), (.5, .65), (.8, 0), (1, 1)]],
@@ -395,18 +478,28 @@ GLYPHS = {
     'H': [[(0, 1), (0, 0)], [(1, 1), (1, 0)], [(0, .5), (1, .5)]],
 }
 
-# Size is set by what survives a 0.4 mm nozzle, not by what fits. At 1.8 mm
-# cap height the bowl of the P came out 0.48 mm tall and would print closed,
-# so the words are held apart and joined to their pin gap by a leader with a
-# kink in it: the tick stays exactly on the gap, the text gets room.
-TEXT_H = 2.40                    # cap height
-TEXT_W = 1.70                    # glyph width
-TEXT_GAP = 0.50                  # between glyphs
-TEXT_STROKE = 0.45
-TEXT_DEPTH = 0.50                # how deep it is cut into the 2 mm plate
+# Sized for a 0.6 mm nozzle, because that is what it has to survive. The first
+# version had a 0.45 mm stroke and printed as nothing at all: a groove
+# narrower than the nozzle is a groove the slicer omits. Everything here is
+# 0.9 mm or wider, cut or raised.
+#
+# That is also why the words are SW and PC rather than SWITCH and PC. At a
+# stroke a 0.6 nozzle can render, SWITCH needs 20 mm of lid and there is 17.7
+# between the window and the lip. Two letters, or nothing legible.
+TEXT_H = 3.80                    # cap height
+TEXT_W = 2.60                    # glyph width
+TEXT_GAP = 0.90                  # between glyphs
+TEXT_STROKE = 1.00               # 1.7 nozzle widths
+TEXT_DEPTH = 0.60                # how deep it is cut into the 2 mm plate
 TEXT_X = -3.4                    # where the words start
 TICK_X = (-6.6, -5.2)            # the leader, pointing at the pin gap
 LEAD_X = -3.8                    # where the leader arrives at the word
+LABELS = (('SW', -20.32, -18.6),  # word, the pin gap it means, where it sits
+          ('PC', -22.86, -24.6))
+
+# What the printer can actually resolve. Every cut and every raised sliver in
+# the marking is checked against this.
+NOZZLE = 0.60
 
 
 def capsule(p0, p1, w, z0, z1):
@@ -437,6 +530,51 @@ def label(text, tick_y, y_mid, z0, z1):
     return U(*parts)
 
 
+def to_lid(mesh):
+    """Move a solid from assembled coordinates into the lid's own.
+
+    The lid's transform is an involution - a half turn about x and a lift -
+    so the same operation serves both ways.
+    """
+    m = mesh.copy()
+    m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+    m.apply_translation([0, 0, LID_FLIP_Z])
+    return m
+
+
+def cable_tongue():
+    """The lid's own plug for the cable notch, in assembled coordinates.
+
+    This replaces the separate gland. A loose plug in a straight slot cannot
+    be locked without a flexure, and a 4 mm slot has no room for one - the
+    tooth-in-a-pocket it was tried with does not hold. Growing the same shape
+    off the lid solves it by not being a separate part: the lid's snap is what
+    retains it, there is nothing to lose, and it prints for free.
+
+    It descends into the notch until it meets the cable, and its underside is
+    the cable's own radius less CABLE_CLAMP, so it beds down on it rather than
+    resting on the crown. That is the strain relief.
+    """
+    x0, x1 = CABLE_X - CABLE_W / 2 + 0.05, CABLE_X + CABLE_W / 2 - 0.05
+    axis = CABLE_Z0 + CABLE_D / 2
+    body = slab(x0, x1, -OUT_L / 2 + 0.05, -CAV_Y - 0.05,
+                axis + CABLE_D / 2 - TONGUE_WRAP, JOINT_Z + 0.05)
+    return D(body, tube(CABLE_X, axis, -OUT_L / 2 - 2.0, -CAV_Y + 1.0,
+                        CABLE_D - 2 * CABLE_CLAMP))
+
+
+def hold_feet():
+    """Footprints of the hold-down blades: x0, x1, y0, y1."""
+    return [(x - HOLD_W / 2, x + HOLD_W / 2, y - L / 2, y + L / 2)
+            for x, y, L in HOLD_RIBS]
+
+
+def hold_ribs():
+    """Blades on the lid that hold the board down, assembled coords."""
+    z0, z1 = BOARD_TOP - HOLD_BITE, LID_FLIP_Z + 0.05
+    return U(*[slab(x0, x1, y0, y1, z0, z1) for x0, x1, y0, y1 in hold_feet()])
+
+
 def marking():
     """PC and SWITCH beside the jumper window, in assembled coordinates.
 
@@ -450,8 +588,8 @@ def marking():
     19-20 leaves GP14 on its pull-up: device, so that pair is the PC.
     """
     top = LID_FLIP_Z + 2.0           # outer face of the lid, assembled
-    art = U(label('SWITCH', -20.32, -18.6, top - TEXT_DEPTH, top + 0.05),
-            label('PC', -22.86, -24.6, top - TEXT_DEPTH, top + 0.05))
+    art = U(*[label(w, tick, mid, top - TEXT_DEPTH, top + 0.05)
+              for w, tick, mid in LABELS])
     art.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
     art.apply_translation([0, 0, LID_FLIP_Z])
     return art
@@ -470,122 +608,57 @@ def make_lid(src):
     # 7. PC / SWITCH engraved beside the window, so the jumper position is
     #    not something to remember.
     out = D(out, marking())
+
+    # 8. The cable tongue, and ribs to hold the board down. Both are built
+    #    in assembled coordinates and pushed back through the lid's own
+    #    transform - the only way to be sure of the handedness.
+    out = U(out, to_lid(cable_tongue()), to_lid(hold_ribs()))
     return out
 
 
-def make_gland(in_place=False):
-    """The plug that closes the cable notch and grips the cable.
-
-    A foot the full thickness of the wall, a thinner blade above it that
-    stops short of the lid's rim, and a cradle underneath. Its outer face is
-    flush with the end of the case: it goes in from above, through the same
-    opening the cable does, so there is nothing to grip and nothing needs to
-    stick out. It is captive in every direction but straight out - the notch
-    walls hold it sideways, the lid's skirt sits 0.05 mm over its top, the
-    cable is under it. Nothing but the cradle's grip holds it against a pull;
-    a snap would need a flexure and a 4 mm slot has no room for one.
-    """
-    w = (CABLE_W - 0.1) / 2          # 0.05 a side in the notch
-    zc = CABLE_Z0 + CABLE_D / 2      # the cable's axis
-    body = U(
-        # foot: the full thickness of the wall, flush at both faces
-        slab(CABLE_X - w, CABLE_X + w, -OUT_L / 2, -CAV_Y,
-             GLAND_Z0, LID_RIM_Z - 0.05),
-        # blade: stops clear of the lid's rim behind it
-        slab(CABLE_X - w, CABLE_X + w, -OUT_L / 2, LID_RIM_Y - 0.05,
-             LID_RIM_Z - 0.05, JOINT_Z - 0.05),
-        # tooth: no higher than the foot, or it would foul the lid's rim
-        slab(CABLE_X - w - GLAND_TAB + 0.05, CABLE_X - w,
-             GLAND_TAB_Y[0] + 0.05, GLAND_TAB_Y[1] - 0.05,
-             GLAND_TAB_Z0, LID_RIM_Z - 0.05),
-    )
-    # Cradle, a hair under the cable so it grips rather than crushes.
-    g = D(body, tube(CABLE_X, zc, -OUT_L / 2 - 2.0, -CAV_Y + 1.0,
-                     CABLE_D - GLAND_PINCH))
-    if in_place:
-        return g
-    # Print it lying on its outer face: a 4.9 x 4.8 footprint 2 mm tall beats
-    # standing it up as modelled.
-    g.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))
-    g.apply_translation([-g.bounds.mean(axis=0)[0], -g.bounds.mean(axis=0)[1],
-                         -g.bounds[0][2]])
-    return g
-
-
-def draw_section(base, path, y=-20.0):
-    """Cross-section through the jig slot, with the jig's outline on it.
-
-    Drawn here rather than in OpenSCAD so the one tool that builds the
-    geometry is also the one that documents it - and so the drawing carries
-    a scale, which a shaded render does not.
-    """
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Polygon
-
-    seg = trimesh.intersections.mesh_plane(base, [0, 1, 0], [0, y, 0])
-    fig, ax = plt.subplots(figsize=(11, 4.2), dpi=130)
-    for a, b in seg[:, :, [0, 2]]:
-        ax.plot([a[0], b[0]], [a[1], b[1]], color='#37474f', lw=1.4,
-                solid_capstyle='round')
-
-    top = FLOOR_Z0 - JIG_ROOF
-    ring = ([(JIG_X + w / 2, top - z) for z, w in JIG_PROFILE] +
-            [(JIG_X - w / 2, top - z) for z, w in reversed(JIG_PROFILE)])
-    ax.add_patch(Polygon(ring, closed=True, facecolor='#e57373',
-                         edgecolor='#b71c1c', lw=0.8, zorder=3))
-    ax.annotate('jig', (JIG_X, top - 2.0), color='#7f0000', ha='center',
-                va='center', fontsize=9, zorder=4)
-
-    ax.set_aspect('equal')
-    ax.set_xlabel('x  [mm]')
-    ax.set_ylabel('z  [mm]')
-    ax.set_title('section at y = %.1f mm - jig rail slot and cable duct' % y,
-                 fontsize=10)
-    ax.grid(True, lw=0.3, color='#b0bec5')
-    ax.set_xticks(np.arange(-13, 13.1, 2))
-    ax.set_yticks(np.arange(-7, 3.1, 1))
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
-
-
 # ----------------------------------------------------------------- preview
-# A z-buffer rasteriser, sixty lines of numpy. The alternative was keeping
-# OpenSCAD around just to draw two pictures, or using matplotlib's 3-D, which
-# sorts faces by centroid and therefore draws nonsense wherever parts
-# interpenetrate - which here is everywhere: case, board, header, jig.
+# A z-buffer rasteriser, sixty lines of numpy. The alternative was keeping a
+# CAD application around just to draw two pictures, or using matplotlib's
+# 3-D, which sorts faces by centroid and therefore draws nonsense wherever
+# parts interpenetrate - which here is everywhere: case, board, header, jig.
 # Per-pixel depth gets it right instead.
 
-def stand_ins():
-    """The Pico, its header and the jumper cap, from datasheet dimensions.
+def pin_y(n):
+    return 24.13 - (n - 1) * 2.54              # pin 1 sits at +24.13
 
-    A fit check, not a portrait of the board: what matters is that the things
-    that have to clear each other are the right size and in the right place.
+
+def components():
+    """What stands on top of the board, as boxes.
+
+    Datasheet dimensions and a photograph, NOT a verified layout: treat it as
+    what the hold-down ribs are checked against, not as proof. The ribs sit at
+    |x| = 7.0, inboard of the pad copper and outboard of all of this, which is
+    the argument that actually matters - none of it reaches past |x| = 6.
     """
-    def pin_y(n):
-        return 24.13 - (n - 1) * 2.54          # pin 1 sits at +24.13
-
-    board = 0.0, 1.0                            # the board's underside, top
-    out = [
-        (slab(-10.5, 10.5, -25.5, 25.5, *board), (0.10, 0.42, 0.23)),
-        (slab(-3.75, 3.75, 20.6, 26.5, 1.0, 3.6), (0.78, 0.80, 0.82)),
-        (slab(-3.5, 3.5, -3.5, 3.5, 1.0, 1.9), (0.17, 0.17, 0.17)),
-        (slab(-2.5, 2.5, 5.0, 9.0, 1.0, 1.7), (0.17, 0.17, 0.17)),
-        (slab(1.5, 4.5, 15.0, 18.0, 1.0, 2.5), (0.17, 0.17, 0.17)),
-        (slab(-6.0, -2.5, 11.0, 15.5, 1.0, 2.0), (0.23, 0.23, 0.23)),
-        # 3-pin header on 18-19-20, and the cap parked on 18-19: host.
-        (slab(PAD_X * -1 - 1.27, -PAD_X + 1.27, pin_y(20) - 1.27,
-              pin_y(20) + 6.35, 1.0, 3.54), (0.07, 0.07, 0.07)),
+    return [
+        (slab(-3.75, 3.75, 20.6, 26.5, 1.0, 3.6), 'micro-USB'),
+        (slab(-3.5, 3.5, -3.5, 3.5, 1.0, 1.9), 'RP2040'),
+        (slab(-2.5, 2.5, 5.0, 9.0, 1.0, 1.7), 'flash'),
+        (slab(1.5, 4.5, 15.0, 18.0, 1.0, 2.5), 'boost inductor'),
+        # Taken off the donor's own flexure cut, which is real evidence for
+        # where the button is - the box that was here before was a guess, it
+        # was 2 mm out, and a rib landed on the flexure because of it.
+        (slab(-7.9, -1.1, 8.5, 17.9, 1.0, 2.0), 'BOOTSEL and its flexure'),
+        (slab(-PAD_X - 1.27, -PAD_X + 1.27, pin_y(20) - 1.27,
+              pin_y(20) + 6.35, 1.0, 3.54), 'header on 18-19-20'),
     ]
+
+
+def stand_ins():
+    """The Pico, its header and the jumper cap, for the preview."""
+    out = [(slab(-10.5, 10.5, -25.5, 25.5, 0.0, BOARD_TOP), (0.10, 0.42, 0.23))]
+    out += [(m, (0.17, 0.17, 0.17)) for m, _ in components()]
     for n in (18, 19, 20):
         out.append((slab(-PAD_X - 0.32, -PAD_X + 0.32, pin_y(n) - 0.32,
                          pin_y(n) + 0.32, 0.0, 10.5), (0.79, 0.64, 0.15)))
     out.append((slab(-PAD_X - 2.0, -PAD_X + 2.0, pin_y(19) - 2.6,
                      pin_y(19) + 2.6, LID_FLIP_Z + 2.0, LID_FLIP_Z + 7.6),
                 (0.12, 0.31, 0.85)))
-    # the cable, lying in its duct
     out.append((tube(CABLE_X, CABLE_Z0 + CABLE_D / 2, -29.0, CABLE_END,
                      CABLE_D), (0.13, 0.13, 0.13)))
     return out
@@ -602,7 +675,6 @@ def render(items, path, eye, target, up=(0, 0, 1), size=(1400, 900), ss=2):
     right /= np.linalg.norm(right)
     cam = np.stack([right, np.cross(right, fwd), -fwd])   # world -> camera
 
-    # One pass to find the scale that fits everything, then draw.
     pts = [np.asarray(m.vertices) for m, _ in items]
     depth = np.full((h, w), np.inf)
     rgb = np.zeros((h, w, 3), np.float32)
@@ -626,18 +698,15 @@ def render(items, path, eye, target, up=(0, 0, 1), size=(1400, 900), ss=2):
         n = np.asarray(mesh.face_normals)
         shade = 0.35 + 0.65 * np.clip(n @ light, 0, 1)
         px, py, pz = sx[tri], sy[tri], z[tri]
-        # screen-space winding: keep the faces turned towards us
         area = ((px[:, 1] - px[:, 0]) * (py[:, 2] - py[:, 0]) -
                 (px[:, 2] - px[:, 0]) * (py[:, 1] - py[:, 0]))
-        keep = area < -1e-9
-        for i in np.nonzero(keep)[0]:
+        for i in np.nonzero(area < -1e-9)[0]:
             x0, x1 = int(max(px[i].min(), 0)), int(min(px[i].max() + 2, w))
             y0, y1 = int(max(py[i].min(), 0)), int(min(py[i].max() + 2, h))
             if x1 <= x0 or y1 <= y0:
                 continue
             gy, gx = np.mgrid[y0:y1, x0:x1]
-            ax, ay = px[i], py[i]
-            d = area[i]
+            ax, ay, d = px[i], py[i], area[i]
             b0 = ((ax[1] - gx) * (ay[2] - gy) - (ax[2] - gx) * (ay[1] - gy)) / d
             b1 = ((ax[2] - gx) * (ay[0] - gy) - (ax[0] - gx) * (ay[2] - gy)) / d
             b2 = 1.0 - b0 - b1
@@ -655,27 +724,62 @@ def render(items, path, eye, target, up=(0, 0, 1), size=(1400, 900), ss=2):
     img.resize(size, Image.LANCZOS).save(path)
 
 
-def previews(base, lid_a, gland_p):
+def previews(base, lid_a):
     shell = (0.91, 0.89, 0.84)
     jig = jig_solid()
     jig.apply_translation([0, -OUT_L / 2 - jig.bounds[0][1], 0])
 
-    closed = [(base, shell), (lid_a, shell), (gland_p, (0.94, 0.63, 0.19)),
-              (jig, (0.75, 0.22, 0.17))]
     # Viewed from -x, so that +x runs left to right and the lid's lettering
     # reads the right way round.
-    render(closed, OUT / 'preview.png', eye=(-44, -66, 46), target=(0, 0, 2))
+    render([(base, shell), (lid_a, shell), (jig, (0.75, 0.22, 0.17))],
+           OUT / 'preview.png', eye=(-44, -66, 46), target=(0, 0, 2))
 
-    # Same scene with the lid and the loose parts pulled clear.
     up_lid = lid_a.copy()
-    up_lid.apply_translation([0, 0, 17.0])
+    up_lid.apply_translation([0, 0, 13.0])
     out_jig = jig.copy()
-    out_jig.apply_translation([0, -26.0, 0])
-    out_gl = gland_p.copy()
-    out_gl.apply_translation([0, -12.0, 0])
-    render([(base, shell), (up_lid, shell), (out_gl, (0.94, 0.63, 0.19)),
+    out_jig.apply_translation([0, -15.0, -3.0])
+    render([(base, shell), (up_lid, shell),
             (out_jig, (0.75, 0.22, 0.17))] + stand_ins(),
-           OUT / 'preview-open.png', eye=(-40, -70, 52), target=(0, -3, 5))
+           OUT / 'preview-open.png', eye=(-38, -64, 44), target=(0, -4, 4))
+
+
+def draw_section(base, path, y=-20.0):
+    """Cross-section through the jig slot, with the jig's outline on it.
+
+    Drawn here rather than in a CAD application so the one tool that builds
+    the geometry is also the one that documents it - and so the drawing
+    carries a scale, which a shaded render does not.
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Polygon
+
+    seg = trimesh.intersections.mesh_plane(base, [0, 1, 0], [0, y, 0])
+    fig, ax = plt.subplots(figsize=(11, 4.2), dpi=130)
+    for a, b in seg[:, :, [0, 2]]:
+        ax.plot([a[0], b[0]], [a[1], b[1]], color='#37474f', lw=1.4,
+                solid_capstyle='round')
+
+    top = FLOOR_Z0 - JIG_ROOF
+    ring = ([(JIG_X + w / 2, top - z) for z, w in JIG_PROFILE] +
+            [(JIG_X - w / 2, top - z) for z, w in reversed(JIG_PROFILE)])
+    ax.add_patch(Polygon(ring, closed=True, facecolor='#e57373',
+                         edgecolor='#b71c1c', lw=0.8, zorder=3))
+    ax.annotate('jig', (JIG_X, top - 2.0), color='#7f0000', ha='center',
+                va='center', fontsize=9, zorder=4)
+
+    ax.set_aspect('equal')
+    ax.set_xlabel('x  [mm]')
+    ax.set_ylabel('z  [mm]')
+    ax.set_title('section at y = %.1f mm - jig rail slot, cable duct and'
+                 ' pin-tail channel' % y, fontsize=10)
+    ax.grid(True, lw=0.3, color='#b0bec5')
+    ax.set_xticks(np.arange(-13, 13.1, 2))
+    ax.set_yticks(np.arange(-7, 3.1, 1))
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
 
 
 def report(name, mesh, ref):
@@ -696,12 +800,10 @@ def main():
 
     base = make_base(base_src)
     lid = make_lid(lid_src)
-    gland = make_gland()
 
     good = True
     good &= report('base', base, base_src)
     good &= report('lid', lid, lid_src)
-    good &= report('gland', gland, None)
 
     # Nothing under the board may see daylight. Both the cable duct and the
     # jig slot are holes in the floor now, so this cannot be a single plane
@@ -796,32 +898,116 @@ def main():
           % (CABLE_D, CABLE_Z0 + CABLE_D, LID_RIM_Z))
     good &= CABLE_Z0 + CABLE_D <= min(LID_RIM_Z, 0.0)
 
-    # The gland has to drop into the notch, clear the lid and land on the
-    # cable. Anything but the cradle's deliberate 0.05 mm grip is a mistake.
-    gp = make_gland(in_place=True)
-
-    for name, other, limit in (('base', base, 0.05), ('lid', lid_a, 0.05)):
-        hit = trimesh.boolean.intersection([gp, other], engine='manifold').volume
-        print('gland vs %-4s: %.3f mm3 interference (want < %.2f)'
-              % (name, hit, limit))
-        good &= hit < limit
+    # The lid's tongue has to sit in the notch without touching the base, and
+    # has to bed into the cable rather than rest on it.
+    tongue = cable_tongue()
+    hit = trimesh.boolean.intersection([tongue, base], engine='manifold').volume
+    print('lid tongue vs base: %.3f mm3 interference (want < 0.05)' % hit)
+    good &= hit < 0.05
     cable = tube(CABLE_X, CABLE_Z0 + CABLE_D / 2, -OUT_L / 2 - 1.0,
                  CABLE_END, CABLE_D)
-    grip = trimesh.boolean.intersection([gp, cable], engine='manifold').volume
-    print('gland grip on the cable: %.2f mm3 (%.2f mm of squeeze)'
-          % (grip, GLAND_PINCH / 2))
-    good &= 0.2 < grip < 6.0
+    grip = trimesh.boolean.intersection([tongue, cable], engine='manifold').volume
+    print('lid tongue bed into the cable: %.2f mm3 (%.2f mm deep)'
+          % (grip, CABLE_CLAMP))
+    good &= 0.2 < grip < 8.0
 
-    # The tooth has to actually lock it: nudge the gland along the slot and
-    # it must run into plastic both ways. Straight up is the only way out,
-    # and the lid is there.
-    for push in (-0.4, 0.4):
-        m = gp.copy()
-        m.apply_translation([0, push, 0])
-        hit = trimesh.boolean.intersection([m, base], engine='manifold').volume
-        print('gland pushed %+.1f mm along the slot: %.2f mm3 into plastic'
-              % (push, hit))
-        good &= hit > 0.3
+    # And the ribs have to land on the board, not on the walls or the pegs.
+    ribs = hold_ribs()
+    hit = trimesh.boolean.intersection([ribs, base], engine='manifold').volume
+    print('hold-down ribs vs base: %.3f mm3 interference (want < 0.05)' % hit)
+    good &= hit < 0.05
+    board = slab(-10.5, 10.5, -25.5, 25.5, 0.0, BOARD_TOP)
+    bite = trimesh.boolean.intersection([ribs, board], engine='manifold').volume
+    print('hold-down ribs bite on the board: %.2f mm3 over %d ribs'
+          % (bite, len(HOLD_RIBS)))
+    good &= bite > 0.5 * HOLD_W * HOLD_BITE * sum(L for _, _, L in HOLD_RIBS)
+
+    # ...and nothing that stands on the board may be under one. This is the
+    # check that took a board scan to get right: the hand-written component
+    # boxes it replaces were wrong twice, once by 2 mm, and put a rib on the
+    # BOOTSEL flexure. BOARD_KEEPOUT is measured and conservative.
+    feet = hold_feet()
+    bad = []
+    for f in feet:
+        ok, where = board_clear(*f)
+        if not ok:
+            bad.append((f, where))
+    print('contact feet on bare board: %d of %d' % (len(feet) - len(bad), len(feet)))
+    for f, (cx, cy, ch) in bad:
+        print('   ON A COMPONENT: foot x %.1f..%.1f y %.1f..%.1f hits a %s mm'
+              ' tall part at (%.1f, %.1f)' % (f[0], f[1], f[2], f[3], ch, cx, cy))
+    good &= not bad
+
+    # And the one that matters most, because the list of components is a guess
+    # and this is not: each rib's footprint is grown by HOLD_CLEAR and the lid
+    # has to be solid over the whole of it. No list of openings to keep up to
+    # date - if the lid has a hole there, this finds it. It is what catches a
+    # rib on the BOOTSEL flexure, which is a spring: it would hold nothing
+    # down and would jam the button.
+    step = 0.1
+    mid = LID_FLIP_Z + 1.0                       # mid-plate, above any recess
+    bad = []
+    for fx0, fx1, fy0, fy1 in feet:
+        gx = np.arange(fx0 - HOLD_CLEAR, fx1 + HOLD_CLEAR, step)
+        gy = np.arange(fy0 - HOLD_CLEAR, fy1 + HOLD_CLEAR, step)
+        X, Y = np.meshgrid(gx, gy, indexing='ij')
+        holes = (~lid_a.contains(np.column_stack([
+            X.ravel(), Y.ravel(), np.full(X.size, mid)]))).sum()
+        if holes:
+            bad.append(((fx0 + fx1) / 2, (fy0 + fy1) / 2, holes * step * step))
+    print('contact feet with an opening in the lid within %.1f mm: %d of %d'
+          % (HOLD_CLEAR, len(bad), len(feet)))
+    # Printed in board terms so it can be checked against a real Pico with a
+    # rule, which is the only way this gets settled: the component list here
+    # is a guess and has been wrong twice.
+    for x, y, a in bad:
+        print('   TOO CLOSE TO A HOLE: (%+.1f, %+.2f), %.1f mm2 of it' % (x, y, a))
+    good &= not bad
+
+    print('   where they land, measured on the board:')
+    for fx0, fx1, fy0, fy1 in feet:
+        print('     %.1f-%.1f mm in from the %s edge,'
+              '  %.1f-%.1f mm from the USB end'
+              % (10.5 - max(abs(fx0), abs(fx1)), 10.5 - min(abs(fx0), abs(fx1)),
+                 'pin 1-20' if fx0 < 0 else 'pin 21-40',
+                 25.5 - fy1, 25.5 - fy0))
+    # The engraving is the one feature a nozzle can silently swallow - the
+    # first version had a 0.45 mm stroke and printed as nothing at all - so it
+    # is measured on the finished lid rather than trusted.
+    #
+    # Run lengths along scan lines do not work for this: a line that clips the
+    # corner of a stroke gives a one-sample run and the test cries wolf. The
+    # question is morphological. Erode each region by half a nozzle: whatever
+    # disappears is a feature the printer cannot lay down, so every connected
+    # piece of groove and every raised island between strokes has to survive.
+    from scipy import ndimage
+    top = LID_FLIP_Z + 2.0
+    step = 0.08
+    xs = np.arange(-7.4, 4.6, step)
+    ys = np.arange(-27.2, -14.8, step)
+    X, Y = np.meshgrid(xs, ys, indexing='ij')
+    solid = lid_a.contains(np.column_stack([
+        X.ravel(), Y.ravel(),
+        np.full(X.size, top - TEXT_DEPTH / 2)])).reshape(X.shape)
+
+    r = int(round(NOZZLE / 2 / step))
+    k = np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) <= r + 0.01
+    worst = []
+    for name, region in (('groove', ~solid), ('raised', solid)):
+        kept = ndimage.binary_erosion(region, k)
+        lab, n = ndimage.label(region)
+        lost = sum(1 for i in range(1, n + 1)
+                   if not kept[lab == i].any() and (lab == i).sum() > 2)
+        worst.append((name, n, lost))
+        print('marking, %-6s: %d pieces, %d too fine for a %.2f mm nozzle'
+              % (name, n, lost, NOZZLE))
+    good &= all(lost == 0 for _, _, lost in worst)
+
+    zs = np.arange(top - 1.2, top - 0.005, 0.01)
+    col = lid_a.contains(np.column_stack([np.full(zs.size, TEXT_X + 0.05),
+                                          np.full(zs.size, LABELS[1][2]), zs]))
+    print('marking depth: %.2f mm into a 2.00 mm plate' % ((~col).sum() * 0.01))
+    good &= (~col).sum() * 0.01 >= TEXT_DEPTH - 0.05
 
     # Retention. The whole point of railing the jig instead of boxing it is
     # that the mouth is narrower than the flange, so it cannot drop out of
@@ -847,13 +1033,12 @@ def main():
 
     lid.export(OUT / 'lid.stl')
     base.export(OUT / 'base.stl')
-    gland.export(OUT / 'gland.stl')
     if '--fast' in sys.argv:
-        print('wrote base.stl, lid.stl, gland.stl (--fast: no pictures)')
+        print('wrote base.stl, lid.stl (--fast: no pictures)')
     else:
         draw_section(base, OUT / 'section.png')
-        previews(base, lid_a, gp)
-        print('wrote base.stl, lid.stl, gland.stl, section.png, preview*.png')
+        previews(base, lid_a)
+        print('wrote base.stl, lid.stl, section.png, preview*.png')
     return 0 if good else 1
 
 

@@ -14,10 +14,9 @@ cuts and fills what the RCM dongle needs.
 | --- | --- |
 | `base.stl` | bottom half |
 | `lid.stl` | top half |
-| `gland.stl` | cable gland, plugs the notch and grips the cable |
-| `build.py` | regenerates all three from the source STL |
+| `build.py` | builds both, checks them, and draws the pictures |
 | `preview.png` | the assembled case |
-| `preview-open.png` | lid lifted, board and header in place, jig and gland out |
+| `preview-open.png` | lid lifted, board and header in place, jig slid out |
 | `section.png` | dimensioned cross-section |
 
 Assembled: 26 × 56 × 11.7 mm — of which 4.20 mm is the jig slot under the
@@ -25,23 +24,35 @@ floor. The case itself is 7.5 mm.
 
 ## What changed from the original
 
-- **Floor closed.** The two GPIO slots in the underside are sealed with a
-  0.6 mm skin. The other 1.4 mm stays as an internal channel, so soldered pin
-  tails still have somewhere to go — but clip them, 1.4 mm is all there is.
+- **Floor closed.** The two GPIO slots in the underside are sealed from below.
+  What was left inside as a 1.4 mm channel for soldered pin tails turned out
+  not to be enough — printed and tried, and solder on the pads bottoms out on
+  it. The pin 1-20 row is now sunk to **3.2 mm** (`TAIL_Z`), which there is
+  room for because the jig slot lowered the floor under it; the pin 21-40 row
+  is the cable duct, deeper still. No need to clip tails any more.
 - **Jumper window**, 4.2 × 9 mm, over pins 18-19-20 only. The 3-pin header
   and its cap come out through the top; the cap sits on the outside of the
   lid with about 4 mm of pin to grip.
-- **PC / SWITCH engraved** beside the window, 0.5 mm deep, each word joined to
-  the pair of pins it means by a leader with a kink in it. Which way round
-  comes from the firmware, not from taste: `MODE_PIN` is GP14 on pin 19,
-  pin 18 is GND and pin 20 is GP15. Cap on 18-19 pulls GP14 down and the board
-  comes up as a host — that pair is the Switch. Cap on 19-20 leaves GP14 on
-  its pull-up: device, so that pair is the PC.
+- **SW / PC engraved** beside the window, 0.6 mm deep, each word joined to the
+  pair of pins it means by a leader with a kink in it. Which way round comes
+  from the firmware, not from taste: `MODE_PIN` is GP14 on pin 19, pin 18 is
+  GND and pin 20 is GP15. Cap on 18-19 pulls GP14 down and the board comes up
+  as a host — that pair is the Switch. Cap on 19-20 leaves GP14 on its
+  pull-up: device, so that pair is the PC.
 
   The letters are a stroke font drawn in `build.py`, not typeset: seven glyphs
-  is not worth a font dependency. Cap height is 2.4 mm because at 1.8 the bowl
-  of the P came out 0.48 mm tall and would print closed — which is why the
-  words are held apart from their pin gaps and reach them with a leader.
+  is not worth a font dependency.
+
+  **This is sized for the nozzle, not for the drawing.** The first version had
+  a 0.45 mm stroke at 2.4 mm cap height and printed as *nothing* — a groove
+  narrower than the nozzle is a groove the slicer omits. Everything is now
+  1.0 mm or wider at 3.8 mm cap height, and `NOZZLE` (0.60) is what it is all
+  judged against. Two side effects worth knowing: the P's bowl sits at 0.35 of
+  the cap height rather than half, because a half-height bowl leaves 0.5 mm of
+  raised material inside it and a 0.6 nozzle turns that to mush; and the words
+  are SW and PC rather than SWITCH and PC, because at a stroke this printer can
+  render, SWITCH needs 20 mm of lid and there are 17.7 between the window and
+  the lip.
 - **Cable duct.** The power cable is soldered to the *underside* of the
   board, so it runs under it, never over: a 4 mm wide, 3.75 mm deep duct sunk
   into the floor along the pin 21-40 row, from the far end wall all the way to
@@ -61,37 +72,75 @@ floor. The case itself is 7.5 mm.
   −4.20 for a 4 mm cable, not −3.70.
 
   `CABLE_D` is the one number to measure: put a caliper on the jacket and set
-  it. The duct depth and the gland's cradle both follow. Getting it too big
-  only loses the gland's grip; too small and the cable jacks the board off its
-  seat, so the default is 4.0 — a full USB jacket. A charge-only cable is
-  usually 3.0–3.5. Checked at 3.0, 3.6 and 4.0.
-- **Cable gland**, `gland.stl`, printed separately. It plugs what is left of
-  the notch above the cable: a foot the full thickness of the wall, a thinner
-  blade above it that stops 0.05 mm short of the lid's rim, and a cradle
-  underneath that squeezes the cable 0.2 mm a side.
-  Its outer face is flush — it goes in from above, through the same opening
-  the cable does, so it needs no lip to pinch and nothing protrudes. Drop the
-  cable in, drop the gland on top of it, close the lid.
+  it. The duct depth and the lid tongue's cradle both follow. It is **3.0**
+  here, measured on the cable this was built for. Getting it too big only loses
+  the tongue's grip; too small and the cable jacks the board off its seat.
+  Checked at 3.0, 3.6 and 4.0.
+- **Cable tongue, grown off the lid.** What plugs the notch above the cable is
+  part of `lid.stl`, not a separate piece. It descends into the notch until it
+  meets the cable, and its underside is the cable's own radius less
+  `CABLE_CLAMP`, so it beds 0.2 mm into it rather than resting on the crown.
+  That is the strain relief: 1.7 mm³ of interference.
 
-  It latches. Going in from above is what makes that possible: the direction
-  it would escape in is not the direction it goes in, so a plain tooth locks
-  it with no flexure anywhere. A 1 × 1.2 × 2.25 mm tooth on its left flank
-  descends a pocket in the notch wall, and once seated the pocket's two faces
-  stop it dead fore and aft — nudged 0.4 mm either way it runs 0.7 mm³ into
-  plastic. Sideways the notch walls hold it, underneath is the cable, and the
-  only way out is straight up, where the lid's skirt sits 0.05 mm over its
-  top. Left flank only: the right one is inside the corner radius, and a
-  pocket there would leave 0.1 mm of outer wall.
+  This started life as a separate printed gland with a tooth that dropped into
+  a pocket in the notch wall. It was printed, and it did not hold. A loose plug
+  in a straight slot cannot be locked without a flexure, and a 4 mm slot has no
+  room for one, so every version of that idea came back to friction. Growing
+  the same shape off the lid solves it by not being a separate part at all: the
+  lid's own snap is what retains it, there is nothing to lose, and it costs
+  nothing to print.
+- **Four ribs on the lid that hold the board down.** The donor's locating pegs
+  stop at z = 1.28, which is 0.28 mm above a 1 mm board — enough to locate it,
+  nothing to keep it there, and 2.55 mm of clear air above. Printed, the board
+  lifts straight out of the case. The ribs land on it with 0.1 mm of bite. They
+  are 0.9 mm blades on purpose: if the print comes out over size a thin blade
+  deforms, where a post would hold the lid off its snap.
 
-  Nothing latches it to the lid, deliberately. With the lid on it is already
-  captive in all six directions, and with the lid off you want to be able to
-  lift it out. A boss into the lid's skirt would only add a tolerance stack
-  onto the snap fit, which is the most delicate thing about this case. What
-  the gland's grip does need is the squeeze on the cable — the tooth stops the
-  gland moving, but only friction stops the cable sliding through it, so
-  `GLAND_PINCH` is set to bite 0.2 mm a side (0.88 mm³ of interference).
+  **Where they land took five goes.** Three of the attempts were mine and all
+  three were wrong:
+
+  | \|x\| | what was wrong |
+  | --- | --- |
+  | 9.5 | on the castellated pads — copper runs to 2.4 mm in from the edge, so past 8.1 is on it. One rib sat on pin 40, a pad from where the cable is soldered. |
+  | 7.0 | off the copper, but one rib landed on the **BOOTSEL flexure**. A rib on a spring holds nothing and jams the button. |
+  | 5.7 | borrowed from *Raspberry Pi Pico Case Top V2*, which touches a Pico at \|x\| 5.15…6.25 on the mounting-hole line. Better, but one rib still sat on a 0.95 mm component. |
+
+  What settled it was a scan of the board. `BOARD_KEEPOUT` is that scan reduced
+  to a table: a 1 mm grid of the tallest thing in each cell, `.` for bare
+  board, marked conservatively so the keep-out is slightly larger than the
+  truth. **Measurements, not somebody's model** — the same principle as the jig
+  profile. The hand-written component boxes are gone from the checks.
+
+  **There are three, not four, and that is deliberate.** The scan says the
+  −x/+y quadrant has no room at all: the flexure owns y 8.5…17.9 of the lid and
+  the LED hole 20.9…22.5. On the +y half the only bare ground left was a
+  two-millimetre window at y +11…+12. A land built round the locating peg was
+  tried there and thrown out — a ring only has to be 0.1 mm oversize to stop
+  seating — and a short blade squeezed into the window was dropped too. Better
+  a support that is not there than one in a place it does not belong. The USB
+  half is held by its two locating pegs and by the connector sitting in the
+  case mouth.
+
+  ```
+  4.3-5.2 mm in from the pin 21-40 edge,  43.7-47.3 mm from the USB end
+  4.5-5.5 mm in from the pin 1-20  edge,  43.7-47.3 mm from the USB end
+  4.5-5.5 mm in from the pin 1-20  edge,  29.2-32.8 mm from the USB end
+  ```
+
+  Three checks guard them, and each caught a real mistake: the footprint must
+  be over bare `BOARD_KEEPOUT`, must not reach past |x| = 8.1 onto the pad
+  copper, and the lid must be **solid over the footprint grown by
+  `HOLD_CLEAR`** — read off the finished lid, not off a list. Put a foot back on
+  the component and it says:
+
+  ```
+  ON A COMPONENT: foot x 5.2..6.2 y 17.2..20.8 hits a 1 mm tall part at (6.0, 21.0)
+  ```
+
 - **Jig rail slot** under the floor, opening at the same end as the cable and
-  offset 3 mm off centre to leave that side of the floor to the duct. It is
+  1 mm off centre — the cable duct wants one side of the floor and the sunk
+  pin-tail channel the other, and the slot has to leave a wall between. It
+  clears the channel by 1.57 mm. It is
   not a box: it has the jig's rail profile, so the jig slides in the way it
   slides into a Joy-Con. Two straight steps, 9.70 mm for the flange and
   7.70 for the tongue, copied from `RCM_Holder_v1.stl`. It goes in upside
@@ -145,8 +194,8 @@ Drawing is most of the runtime. `./build.py --fast` skips it.
 
 ## Printing
 
-Three parts: `base.stl`, `lid.stl`, `gland.stl`. All three print in the
-orientation they are saved in.
+Two parts: `base.stl` and `lid.stl`. Both print in the orientation they are
+saved in.
 
 As the source model: 0.4 mm nozzle, 0.2 mm layers, no supports. Both parts
 print in the orientation they are saved in. The thinnest new feature is the
@@ -185,9 +234,12 @@ cannot catch a jig whose real section differs from the table. Measure carefully.
 Every dimension is measured off those meshes, so the script also self-checks:
 watertightness,
 an unchanged footprint, at least 0.5 mm of material in every column under the
-board, a clear path for the jumper, a clear run for the cable from outside the
-end wall to pin 39, room to drop that cable in from above, and clearance
-between the cable and the lid's rim. For the jig it does the real thing: puts
+board, that no piece of the engraving is finer than `NOZZLE` (an erosion by
+half a bead — whatever vanishes is a feature the printer cannot lay down), a clear path for the jumper, a clear run for the cable from outside the
+end wall to pin 39, room to drop that cable in from above, clearance between
+the cable and the lid's rim, that the lid's tongue misses the base and beds
+into the cable, and that the hold-down ribs miss the base and land on the
+board. For the jig it does the real thing: puts
 the jig mesh in the slot at three positions along the slide and checks that
 not one of its 3188 vertices ends up inside plastic. It exits non-zero if any
 check fails.

@@ -490,7 +490,6 @@ src/
 case/
   base.stl            printable enclosure, see case/README.md
   lid.stl
-  gland.stl           cable gland
-  build.py            builds all three from the donor model, checks them,
-                      and draws the section and the previews
+  build.py            builds both from the donor model, checks them, and
+                      draws the section and the previews
 ```
