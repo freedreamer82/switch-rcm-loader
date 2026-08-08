@@ -24,35 +24,57 @@ floor. The case itself is 7.5 mm.
 
 ## What changed from the original
 
-- **Floor closed.** The two GPIO slots in the underside are sealed from below.
-  What was left inside as a 1.4 mm channel for soldered pin tails turned out
-  not to be enough — printed and tried, and solder on the pads bottoms out on
-  it. The pin 1-20 row is now sunk to **3.2 mm** (`TAIL_Z`), which there is
-  room for because the jig slot lowered the floor under it; the pin 21-40 row
-  is the cable duct, deeper still. No need to clip tails any more.
+- **Floor closed, and the pin-tail channels sunk.** The stock 1.4 mm
+  castellation channel is not enough — printed and tried, and solder on the
+  pads bottoms out on it. Both rows now go down to **4.2 mm**: the pin 21-40
+  row is the cable duct and the pin 1-20 row (`TAIL_Z`) meets it at the same
+  level, which is one internal surface fewer for the slicer to make a mess of.
+  There is room because the jig slot lowered the floor under both. No need to
+  clip tails.
+
+  Nothing plugs the donor's slots any more. A 0.6 mm plug used to go in and
+  every bit of it was removed again by those deeper cuts — it was doing nothing
+  but adding a coplanar face. What seals the floor underneath is the jig tray's
+  own skirt, 2 mm of it.
 - **Jumper window**, 4.2 × 9 mm, over pins 18-19-20 only. The 3-pin header
   and its cap come out through the top; the cap sits on the outside of the
   lid with about 4 mm of pin to grip.
-- **SW / PC engraved** beside the window, 0.6 mm deep, each word joined to the
-  pair of pins it means by a leader with a kink in it. Which way round comes
+- **SW / PC raised on the lid**, in a field sunk 0.6 mm, each mark joined to
+  the pair of pins it means by a leader with a kink in it, standing 0.8 mm
+  clear of the lettering (`LEAD_GAP`). Which way round comes
   from the firmware, not from taste: `MODE_PIN` is GP14 on pin 19, pin 18 is
   GND and pin 20 is GP15. Cap on 18-19 pulls GP14 down and the board comes up
-  as a host — that pair is the Switch. Cap on 19-20 leaves GP14 on its
-  pull-up: device, so that pair is the PC.
+  as a host — that pair is the **SW**itch. Cap on 19-20 leaves GP14 on its
+  pull-up: device, so that pair is the **PC**.
 
-  The letters are a stroke font drawn in `build.py`, not typeset: seven glyphs
-  is not worth a font dependency.
+  **Raised, not engraved, and that is the whole point.** The lid prints
+  outer-face-down, so anything cut into that face is a hole in the first
+  layers: first-layer squash closes it and the perimeters round a narrow slot
+  smear together. Printed at a 0.45 mm stroke it came out as nothing at all,
+  and at 1.0 mm it was still unreadable. This way round the letters are solid
+  material standing on the glass — the one thing an FDM printer does perfectly
+  — and the contrast comes from the sunken field around them.
 
-  **This is sized for the nozzle, not for the drawing.** The first version had
-  a 0.45 mm stroke at 2.4 mm cap height and printed as *nothing* — a groove
-  narrower than the nozzle is a groove the slicer omits. Everything is now
-  1.0 mm or wider at 3.8 mm cap height, and `NOZZLE` (0.60) is what it is all
-  judged against. Two side effects worth knowing: the P's bowl sits at 0.35 of
-  the cap height rather than half, because a half-height bowl leaves 0.5 mm of
-  raised material inside it and a 0.6 nozzle turns that to mush; and the words
-  are SW and PC rather than SWITCH and PC, because at a stroke this printer can
-  render, SWITCH needs 20 mm of lid and there are 17.7 between the window and
-  the lip.
+  Getting there turned up three more things, each caught by tightening the
+  check rather than by looking at it:
+
+  - the margin round the lettering was **half** what it looked like. Strokes
+    are drawn as capsules, so a letter reaches half a stroke past its nominal
+    cap height; 1.0 mm of margin was really 0.5. The field is now derived from
+    the labels (`field_box()`) instead of typed in.
+  - adjacent letters **merged**. The gap between glyph cells was 0.9 mm and the
+    stroke is 1.0, so the visual gap was negative. `TEXT_GAP` has to clear a
+    stroke plus a bead.
+  - the **W needs a cell of its own**, which is what `GLYPH_W` is for. Its legs
+    pass within 0.331 of the glyph width of each other, so at a 1 mm stroke a
+    3 mm cell puts them 0.0 apart and they merge into a blob. 5.2 mm leaves
+    0.72, clear of a bead. Nothing else in SW or PC is dense enough to care.
+
+  The check is now a morphological **opening** — erode by half a bead, dilate
+  back — and what the opening removes is what the nozzle cannot lay down. The
+  version before it tested whole connected pieces, which cleared a 0.5 mm neck
+  inside an otherwise fat region; and it eroded from the edge of its own
+  sampling grid, which produced false alarms until the border was excluded.
 - **Cable duct.** The power cable is soldered to the *underside* of the
   board, so it runs under it, never over: a 4 mm wide, 3.75 mm deep duct sunk
   into the floor along the pin 21-40 row, from the far end wall all the way to
@@ -197,12 +219,21 @@ Drawing is most of the runtime. `./build.py --fast` skips it.
 Two parts: `base.stl` and `lid.stl`. Both print in the orientation they are
 saved in.
 
-As the source model: 0.4 mm nozzle, 0.2 mm layers, no supports. Both parts
-print in the orientation they are saved in. The thinnest new feature is the
-0.6 mm skin over the closed GPIO slots. Neither the jig slot nor the cable
-duct needs support: the duct is open at the top, and the jig slot opens at
-the bed as a 7.70 mm slit with one 1 mm ledge per side and a 9.70 mm bridge
-over it.
+0.4 mm nozzle, 0.2 mm layers, no supports. Both parts print in the orientation
+they are saved in. Neither the jig slot nor the cable duct needs support: the
+duct is open at the top, and the jig slot opens at the bed as a 7.70 mm slit
+with one 1 mm ledge per side and a 9.70 mm bridge over it.
+
+Two settings matter more here than usual, because the geometry cannot fix
+either of them:
+
+- **Top solid layers, 5 rather than 3, and infill 25% or more.** The inside of
+  the base has several floors at different heights — the cavity at 0, the two
+  channels at −4.2, the jig slot's roof — and every one of them is a *top
+  surface* the slicer has to close over infill. Three layers over 15% infill is
+  what makes them look chewed. Ironing on top surfaces helps further.
+- **A clean first layer on the lid.** Its outer face, lettering and all, is
+  layer one. Over-squashing it closes the field around the letters.
 
 ## Regenerating
 

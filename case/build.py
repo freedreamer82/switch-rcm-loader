@@ -55,13 +55,14 @@ JOINT_Z = 3.05                   # outside seam, in base coordinates
 LID_FLIP_Z = 3.55                # z_base = LID_FLIP_Z - z_lid
 
 PAD_X = 9.0                      # centre of the castellation row
-SKIN = 0.6                       # material left under the closed slots
+SKIN = 0.6                       # unused: see make_base note 1
 
 # The stock castellation channel is 1.4 mm deep, and a printed board with
 # solder on the pads touches its floor. There is room to sink it now that the
-# jig slot has lowered the floor, so it goes down to here instead. The +x row
-# gets the cable duct, which is deeper still.
-TAIL_Z = -3.2
+# jig slot has lowered the floor, so it goes down to the same level as the
+# cable duct on the other side - one internal surface fewer for the slicer to
+# make a mess of, and more room for pin tails while we are at it.
+TAIL_Z = -4.2
 
 # Nothing held the board down: the donor's locating pegs stop at z = 1.28,
 # which is 0.28 mm above a 1 mm board - enough to locate it, nothing to keep
@@ -403,12 +404,12 @@ def load():
 def make_base(src):
     out = src
 
-    # 1. Close the GPIO slots from below, leaving an internal channel.
-    #    The plug is a touch wider than the slot in x and longer in y; the
-    #    excess lands on floor that is already solid.
-    for s in (-1, 1):
-        out = U(out, slab(s * (SLOT_X0 - 0.15), s * (SLOT_X1 + 0.15),
-                          -26.0, 26.0, FLOOR_Z0, FLOOR_Z0 + SKIN))
+    # 1. The donor's two GPIO slots need closing, but not by plugging them:
+    #    both are cut deeper further down - the pin-tail channel on one side,
+    #    the cable duct on the other - and what seals the floor underneath
+    #    both is the jig tray's own skirt. A 0.6 mm plug used to go in here
+    #    and every bit of it was removed again by those later cuts. It was
+    #    doing nothing but adding a coplanar face for the slicer to trip on.
 
     # 5. Jig tray. The floor grows downwards by TRAY, keeping the same
     #    profile; the hull of two rounded prisms gives the new bottom the
@@ -478,24 +479,57 @@ GLYPHS = {
     'H': [[(0, 1), (0, 0)], [(1, 1), (1, 0)], [(0, .5), (1, .5)]],
 }
 
-# Sized for a 0.6 mm nozzle, because that is what it has to survive. The first
-# version had a 0.45 mm stroke and printed as nothing at all: a groove
-# narrower than the nozzle is a groove the slicer omits. Everything here is
-# 0.9 mm or wider, cut or raised.
+# RAISED letters in a sunken field, not engraved strokes - and that is the
+# whole point, not a style choice. The lid prints outer-face-down, so anything
+# cut into that face is a hole in the first layers: first-layer squash closes
+# it and the perimeters round a 1 mm slot smear together. Printed at 0.45 mm
+# stroke it came out as nothing, and at 1.0 mm it was still unreadable.
 #
-# That is also why the words are SW and PC rather than SWITCH and PC. At a
-# stroke a 0.6 nozzle can render, SWITCH needs 20 mm of lid and there is 17.7
-# between the window and the lip. Two letters, or nothing legible.
-TEXT_H = 3.80                    # cap height
-TEXT_W = 2.60                    # glyph width
-TEXT_GAP = 0.90                  # between glyphs
-TEXT_STROKE = 1.00               # 1.7 nozzle widths
+# This way round, the letters are solid material standing on the glass, which
+# is the one thing an FDM printer does perfectly, and the contrast comes from
+# the 0.6 mm field sunk around them. The letters are pillars off the field
+# floor, so they are not loose islands either.
+#
+# The W needs its own width, which is why GLYPH_W exists. Its legs pass within
+# 0.331 of the glyph width of each other, so at a 1 mm stroke a 3 mm cell puts
+# them 0.0 apart - they merge into a blob. 5.2 mm leaves 0.72, clear of a bead.
+# Nothing else in SW or PC is dense enough to care. Two letters, or nothing legible.
+TEXT_H = 4.40                    # cap height
+TEXT_W = 3.00                    # glyph width
+TEXT_GAP = 1.70                  # between glyphs: it has to clear a stroke
+                                 # plus a bead, or adjacent letters merge
+TEXT_STROKE = 1.00
 TEXT_DEPTH = 0.60                # how deep it is cut into the 2 mm plate
-TEXT_X = -3.4                    # where the words start
+GLYPH_W = {'W': 5.2}             # cells that need to be wider than TEXT_W
+TEXT_X = -1.8                    # where the words start
 TICK_X = (-6.6, -5.2)            # the leader, pointing at the pin gap
-LEAD_X = -3.8                    # where the leader arrives at the word
-LABELS = (('SW', -20.32, -18.6),  # word, the pin gap it means, where it sits
-          ('PC', -22.86, -24.6))
+LEAD_X = -3.6                    # where it stops: LEAD_GAP short of the word
+LEAD_GAP = 0.8                   # daylight between leader and lettering
+LABELS = (('SW', -20.32, -15.7),  # mark, the pin gap it means, where it sits
+          ('PC', -22.86, -22.9))
+
+# The sunken field, derived from the labels rather than typed in. Two goes at
+# typing it went wrong the same way: the strokes are drawn as capsules, so a
+# letter reaches half a stroke past its nominal cap height, and the margin
+# that looked like 1.0 mm was really 0.5 - narrower than a bead, and the check
+# threw it out. FIELD_MARGIN is the real clearance round the lettering.
+FIELD_MARGIN = 1.0
+FIELD_LEFT = -7.2                # runs into the jumper window on purpose, so
+                                 # the leaders reach the pins
+
+
+def word_width(text):
+    return (sum(GLYPH_W.get(c, TEXT_W) for c in text)
+            + TEXT_GAP * (len(text) - 1))
+
+
+def field_box():
+    reach = TEXT_H / 2 + TEXT_STROKE / 2
+    x1 = (TEXT_X + max(word_width(w) for w, _, _ in LABELS)
+          + TEXT_STROKE / 2 + FIELD_MARGIN)
+    mids = [m for _, _, m in LABELS]
+    return (FIELD_LEFT, x1,
+            min(mids) - reach - FIELD_MARGIN, max(mids) + reach + FIELD_MARGIN)
 
 # What the printer can actually resolve. Every cut and every raised sliver in
 # the marking is checked against this.
@@ -520,13 +554,14 @@ def label(text, tick_y, y_mid, z0, z1):
                      TEXT_STROKE, z0, z1)]
     x = TEXT_X
     for ch in text:
+        w = GLYPH_W.get(ch, TEXT_W)
         for poly in GLYPHS[ch]:
             for a, b in zip(poly[:-1], poly[1:]):
                 parts.append(capsule(
-                    (x + a[0] * TEXT_W, y_mid + (a[1] - .5) * TEXT_H),
-                    (x + b[0] * TEXT_W, y_mid + (b[1] - .5) * TEXT_H),
+                    (x + a[0] * w, y_mid + (a[1] - .5) * TEXT_H),
+                    (x + b[0] * w, y_mid + (b[1] - .5) * TEXT_H),
                     TEXT_STROKE, z0, z1))
-        x += TEXT_W + TEXT_GAP
+        x += w + TEXT_GAP
     return U(*parts)
 
 
@@ -588,8 +623,12 @@ def marking():
     19-20 leaves GP14 on its pull-up: device, so that pair is the PC.
     """
     top = LID_FLIP_Z + 2.0           # outer face of the lid, assembled
-    art = U(*[label(w, tick, mid, top - TEXT_DEPTH, top + 0.05)
-              for w, tick, mid in LABELS])
+    strokes = U(*[label(w, tick, mid, top - TEXT_DEPTH - 0.05, top + 0.05)
+                  for w, tick, mid in LABELS])
+    # Sink the field, keep the letters. The field runs into the jumper window
+    # on its left, which is what makes the leaders reach the pins.
+    field = rrect(*field_box(), top - TEXT_DEPTH, top + 0.05, 1.2)
+    art = D(field, strokes)
     art.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
     art.apply_translation([0, 0, LID_FLIP_Z])
     return art
@@ -992,20 +1031,33 @@ def main():
 
     r = int(round(NOZZLE / 2 / step))
     k = np.hypot(*np.mgrid[-r:r + 1, -r:r + 1]) <= r + 0.01
-    worst = []
-    for name, region in (('groove', ~solid), ('raised', solid)):
-        kept = ndimage.binary_erosion(region, k)
-        lab, n = ndimage.label(region)
-        lost = sum(1 for i in range(1, n + 1)
-                   if not kept[lab == i].any() and (lab == i).sum() > 2)
-        worst.append((name, n, lost))
-        print('marking, %-6s: %d pieces, %d too fine for a %.2f mm nozzle'
-              % (name, n, lost, NOZZLE))
-    good &= all(lost == 0 for _, _, lost in worst)
+    # Per-piece erosion is not enough: it clears a thin neck inside an
+    # otherwise fat region, and there was a 0.5 mm one between the W and the
+    # edge of the field. So this is an OPENING - erode then dilate - and what
+    # the opening removes is what the nozzle cannot lay down, neck or island.
+    worst = 0.0
+    edge = np.zeros_like(solid)               # the sampling border erodes too,
+    edge[r + 1:-r - 1, r + 1:-r - 1] = True   # so its losses do not count
+    for name, region in (('sunken field', ~solid), ('raised letters', solid)):
+        opened = ndimage.binary_dilation(
+            ndimage.binary_erosion(region, k, border_value=1), k)
+        lost = region & ~opened & edge
+        lab, n = ndimage.label(lost)
+        blobs = sorted(((lab == i).sum() * step * step,
+                        X[lab == i].mean(), Y[lab == i].mean())
+                       for i in range(1, n + 1))[::-1]
+        big = blobs[0] if blobs else (0.0, 0, 0)
+        worst = max(worst, big[0])
+        print('marking, %-14s: %.2f mm2 lost to a %.2f mm nozzle, worst patch'
+              ' %.2f mm2' % (name, lost.sum() * step * step, NOZZLE, big[0]))
+        if big[0] > 0.30:
+            print('     TOO FINE around (%+.2f, %+.2f)' % (big[1], big[2]))
+    good &= worst <= 0.30
 
+    # Probe the field, not a letter: the letters now stand at full height.
     zs = np.arange(top - 1.2, top - 0.005, 0.01)
-    col = lid_a.contains(np.column_stack([np.full(zs.size, TEXT_X + 0.05),
-                                          np.full(zs.size, LABELS[1][2]), zs]))
+    col = lid_a.contains(np.column_stack([
+        np.full(zs.size, field_box()[1] - 0.5), np.full(zs.size, -21.0), zs]))
     print('marking depth: %.2f mm into a 2.00 mm plate' % ((~col).sum() * 0.01))
     good &= (~col).sum() * 0.01 >= TEXT_DEPTH - 0.05
 
