@@ -164,7 +164,7 @@ work, because pin 20 is GP15 and nothing is connected to it, but parking it is
 the point of the third pin: the cap never comes off the board and cannot be
 lost. Taking it off entirely gives DEVICE mode too.
 
-The printed lid says which is which, engraved beside the window.
+The printed lid says which is which, marked beside the window.
 
 Parking is only harmless because the firmware pulls **GP15 up** as well
 (`MODE_PARK_PIN`). A GPIO nobody touches keeps its reset state, and on RP2040

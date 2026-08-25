@@ -19,7 +19,7 @@ cuts and fills what the RCM dongle needs.
 | `preview-open.png` | lid lifted, board and header in place, jig slid out |
 | `section.png` | dimensioned cross-section |
 
-Assembled: 26 × 56 × 11.7 mm — of which 4.20 mm is the jig slot under the
+Assembled: 26 × 56 × 11.9 mm — of which 4.30 mm is the jig slot under the
 floor. The case itself is 7.5 mm.
 
 ## What changed from the original
@@ -39,42 +39,71 @@ floor. The case itself is 7.5 mm.
 - **Jumper window**, 4.2 × 9 mm, over pins 18-19-20 only. The 3-pin header
   and its cap come out through the top; the cap sits on the outside of the
   lid with about 4 mm of pin to grip.
-- **SW / PC raised on the lid**, in a field sunk 0.6 mm, each mark joined to
-  the pair of pins it means by a leader with a kink in it, standing 0.8 mm
-  clear of the lettering (`LEAD_GAP`). Which way round comes
+- **SW / PC raised on the lid**, each outlined by a moat sunk 0.6 mm and joined
+  to the pair of pins it means by a leader that runs from the edge of the
+  jumper window straight onto the word. Which way round comes
   from the firmware, not from taste: `MODE_PIN` is GP14 on pin 19, pin 18 is
   GND and pin 20 is GP15. Cap on 18-19 pulls GP14 down and the board comes up
   as a host — that pair is the **SW**itch. Cap on 19-20 leaves GP14 on its
   pull-up: device, so that pair is the **PC**.
 
-  **Raised, not engraved, and that is the whole point.** The lid prints
-  outer-face-down, so anything cut into that face is a hole in the first
-  layers: first-layer squash closes it and the perimeters round a narrow slot
-  smear together. Printed at a 0.45 mm stroke it came out as nothing at all,
-  and at 1.0 mm it was still unreadable. This way round the letters are solid
-  material standing on the glass — the one thing an FDM printer does perfectly
-  — and the contrast comes from the sunken field around them.
+  **A moat, not a sunken plate, and not engraved strokes.** The lid prints
+  outer-face-down, so this face *is* the first layer, and all three ways of
+  marking it have now been printed:
 
-  Getting there turned up three more things, each caught by tightening the
-  check rather than by looking at it:
+  | | what happens |
+  | --- | --- |
+  | strokes cut in | holes in the first layers. Squash closes them and the perimeters round a narrow slot smear together. At a 0.45 mm stroke it printed as nothing; at 1.0 mm it was still unreadable. |
+  | a whole plate sunk round them | the plate's floor is a 17 × 15 mm **bridge over open air**, 0.6 mm off the glass, laid while the fan is still off, with nothing under it but the letters. It sags onto them. |
+  | a moat round each stroke | the face stays flat and whole, the letters stand on the glass, and the only thing bridging is a 1.2 mm ribbon. |
 
-  - the margin round the lettering was **half** what it looked like. Strokes
-    are drawn as capsules, so a letter reaches half a stroke past its nominal
-    cap height; 1.0 mm of margin was really 0.5. The field is now derived from
-    the labels (`field_box()`) instead of typed in.
-  - adjacent letters **merged**. The gap between glyph cells was 0.9 mm and the
-    stroke is 1.0, so the visual gap was negative. `TEXT_GAP` has to clear a
-    stroke plus a bead.
-  - the **W needs a cell of its own**, which is what `GLYPH_W` is for. Its legs
-    pass within 0.331 of the glyph width of each other, so at a 1 mm stroke a
-    3 mm cell puts them 0.0 apart and they merge into a blob. 5.2 mm leaves
-    0.72, clear of a bead. Nothing else in SW or PC is dense enough to care.
+  The second row is both halves of what the second print looked like: a field
+  that came out chewed, and lettering that came out chewed because the field
+  landed on it. So what is sunk now is only `HALO` = 1.2 mm either side of
+  every stroke — the strokes dilated, less the strokes — and the rest of the
+  lid's face is left alone. The letters read because they are outlined, not
+  because they sit in a tray.
 
-  The check is now a morphological **opening** — erode by half a bead, dilate
+  Four things followed from the change, each caught by the check rather than
+  by looking at it:
+
+  - the stroke is **1.20 mm**, not 1.00. It is a whole number of beads — 3 × 0.4
+    or 2 × 0.6 — so the slicer lays it as full extrusions instead of two
+    perimeters and a gap it has to fudge. That fudge is the other half of
+    "printed badly".
+  - the words moved **1.2 mm up the lid**. Sunk as a plate the lettering could
+    sit 0.5 mm from the rim, because the plate stopped short of it. A moat does
+    not stop short: it left a 0.4 mm rib of plate between itself and the edge
+    roundover.
+  - the leader lost its **kink**, and now touches the word. The kinked version
+    climbed past the top corner of the jumper window and pinched the plate to
+    0.35 mm on the way; the 0.8 mm of daylight it used to leave before the
+    lettering left a peninsula of plate reaching in behind it. Joined, leader
+    and word are one island with one outline.
+  - it meets the word at **the pin's own height**, clamped to the word's cap
+    height (`lead_y()`). Aimed at the middle instead, SW's leader arrived at
+    38° to the S and the moat closed to a point in the corner. Aimed at the
+    foot, the leader and the foot of the S continue into each other. PC's pin
+    gap is level with its own word, so it gets a straight horizontal leader.
+
+  Two leaders leaving the same edge 2.54 mm apart and arriving 7.2 mm apart
+  trap a wedge of plate between them, and a wedge has a point. There is
+  nowhere to move it to, so `fan()` takes it into the moat and the leaders come
+  out as its two edges.
+
+  The **W needs a cell of its own**, which is what `GLYPH_W` is for. Its legs
+  pass within 0.331 of the glyph width of each other, so at a 1.2 mm stroke a
+  2.8 mm cell puts them 0.0 apart and they merge into a blob. 5.6 mm leaves
+  0.65, clear of a bead. Nothing else in SW or PC is dense enough to care.
+
+  The check is a morphological **opening** — erode by half a bead, dilate
   back — and what the opening removes is what the nozzle cannot lay down. The
   version before it tested whole connected pieces, which cleared a 0.5 mm neck
   inside an otherwise fat region; and it eroded from the edge of its own
   sampling grid, which produced false alarms until the border was excluded.
+  Its window is now derived from the marking (`marking_box()`): the literal it
+  replaces stopped 5 mm short of the W, so the one check that would have caught
+  a merged letter was never looking at it.
 - **Cable duct.** The power cable is soldered to the *underside* of the
   board, so it runs under it, never over: a 4 mm wide, 3.75 mm deep duct sunk
   into the floor along the pin 21-40 row, from the far end wall all the way to
@@ -162,44 +191,68 @@ floor. The case itself is 7.5 mm.
 - **Jig rail slot** under the floor, opening at the same end as the cable and
   1 mm off centre — the cable duct wants one side of the floor and the sunk
   pin-tail channel the other, and the slot has to leave a wall between. It
-  clears the channel by 1.57 mm. It is
+  clears the channel by 1.47 mm. It is
   not a box: it has the jig's rail profile, so the jig slides in the way it
-  slides into a Joy-Con. Two straight steps, 9.70 mm for the flange and
-  7.70 for the tongue, copied from `RCM_Holder_v1.stl`. It goes in upside
-  down, which buries the 9.70 chamber and leaves a 7.70 mouth at the open
-  underside — 0.71 mm of lip a side against a 9.09 flange, so too wide
+  slides into a Joy-Con. Two straight steps, 9.90 mm for the flange and
+  7.90 for the tongue. It goes in upside
+  down, which buries the 9.90 chamber and leaves a 7.90 mouth at the open
+  underside — 0.61 mm of lip a side against a 9.09 flange, so too wide
   to fall out, and the shoulder stops it lifting. One bump on each wall near
   the mouth keeps it from working its way out. This is the whole reason the
-  case is 11.8 mm and not 7.5 — a 4 mm jig has to go somewhere.
+  case is 11.9 mm and not 7.5 — a 4 mm jig has to go somewhere.
+
+  **The mouth is flared**, because of the first print: it opens out by 0.45 mm
+  a side over the first 2.5 mm (`JIG_FLARE`), so the jig finds the rails
+  instead of having to arrive on them.
 - **Nothing done to the lid** beyond the window. The cable runs underneath,
   so the lid needs no pass-through and no wire channel, and keeps its full
   2 mm.
 
 ## Jig fit
 
-The profile is `JIG_FLANGE_W` / `JIG_TONGUE_W` = 9.70 / 7.70, lifted from
-`RCM_Holder_v1.stl` — that model is drawn 10×, and at 1/10 its pocket is
-exactly the jig plus 0.3 mm a side. Straight steps, deliberately not
-following the tongue's taper: the extra slack up there costs nothing.
+The profile is `JIG_FLANGE_W` / `JIG_TONGUE_W` = 9.90 / 7.90 — the jig plus
+0.4 mm a side. Straight steps, deliberately not following the tongue's taper:
+the extra slack up there costs nothing.
 
-Everything else comes off the jig mesh at `JIG_SRC`
-(`Joycon_Jig_triforce.stl`, 9.09 × 20.00 × 4.00 mm) — how deep the slot is,
-how far down the step sits, how much the floor has to grow, how tall the case
-ends up. So the two widths are the only numbers to touch: rattles, lower
-them; will not go in, raise them. `JIG_DETENT` is how hard it clicks, and
-0.3 mm of it is eaten by the flange clearance.
+**It was 9.70 / 7.70 and that is a press fit.** Those are `RCM_Holder_v1`'s own
+numbers, 0.3 mm a side, and they are right for what that model is: a tray, open
+at the top, that the jig is dropped into. This is a horizontal rail, printed,
+and three separate things eat the same 0.3 mm —
 
-The step height is worth a word. It is derived, not typed: `silhouette()`
-finds where the jig's flange ends and the step goes just below it. Put the
-step even 0.1 mm high and the 9.09 flange fouls the 7.70 tongue slot, which
-shows up only as a jig that will not go in. The script checks the profile
-against the jig's measured outline at every height and then slides the actual
-mesh through the finished slot, so that mistake cannot ship.
+- the mouth is a **first layer** and elephant-foots inwards,
+- the flange chamber's roof is a **bridge** and sags down into it,
+- the ledge the flange rides on is an **overhang** and droops.
+
+— which is why the first print went in under force and then had to be fought
+back out. The vertical was worse than the width: 0.20 mm of roof clearance and
+0.08 mm under the flange, against sag and droop of about that much. It is now
+`JIG_ROOF` = 0.30 over the tip and `JIG_DROP` = 0.25 under the flange.
+
+Everything else comes off `JIG_PROFILE` — how deep the slot is, how far down
+the step sits, how much the floor has to grow, how tall the case ends up. So
+the two widths are the only numbers to touch: rattles, lower them; will not go
+in, raise them. `JIG_TONGUE_W` is also the mouth, so it is what the retention
+check measures — 8.09 is the most it can be and still leave 0.5 mm of lip
+against the 9.09 flange. `JIG_DETENT` is how hard it clicks, and the clearance
+eats it: at 9.70 it left 0.2 mm a side of real interference, which is a lot to
+shove a 4 mm rail past, and at 9.90 it leaves 0.1. It should click, not lock.
+
+The step height is worth a word. It is derived, not typed: it goes `JIG_DROP`
+below the last height at which the jig is still wider than the tongue slot,
+which is where its flange ends. Put it even 0.1 mm high and the 9.09 flange
+fouls the 7.90 tongue slot, which shows up only as a jig that will not go in.
+
+The script checks the profile against the jig's measured outline at every
+height, then slides the profile through the finished slot at three positions —
+and then does it again **0.3 mm off centre, 0.25 mm up and both at once**. That
+last one is the check the first print would have failed: the nominal position
+fitting is also true of a press fit, and what matters is whether there is room
+to be wrong by as much as a printer is wrong by.
 
 ## Pictures
 
 `build.py` draws them itself — there is no CAD application in the loop, and
-nothing to install beyond the four Python packages below.
+nothing to install beyond the Python packages below.
 
 The section comes from matplotlib and carries a scale, so it can be measured
 off. The two 3-D views come from a z-buffer rasteriser in `render()`, about
@@ -221,24 +274,33 @@ saved in.
 
 0.4 mm nozzle, 0.2 mm layers, no supports. Both parts print in the orientation
 they are saved in. Neither the jig slot nor the cable duct needs support: the
-duct is open at the top, and the jig slot opens at the bed as a 7.70 mm slit
-with one 1 mm ledge per side and a 9.70 mm bridge over it.
+duct is open at the top, and the jig slot opens at the bed as a 7.90 mm slit
+with one 1 mm ledge per side and a 9.90 mm bridge over it.
 
-Two settings matter more here than usual, because the geometry cannot fix
-either of them:
+Three settings matter more here than usual, because the geometry cannot fix
+any of them:
 
 - **Top solid layers, 5 rather than 3, and infill 25% or more.** The inside of
   the base has several floors at different heights — the cavity at 0, the two
   channels at −4.2, the jig slot's roof — and every one of them is a *top
   surface* the slicer has to close over infill. Three layers over 15% infill is
   what makes them look chewed. Ironing on top surfaces helps further.
-- **A clean first layer on the lid.** Its outer face, lettering and all, is
-  layer one. Over-squashing it closes the field around the letters.
+- **Elephant-foot compensation on, 0.1–0.2 mm.** Both parts care, for opposite
+  reasons. On the base it is the jig slot's mouth: that 7.90 mm slit is a first
+  layer, and what squashes out of it is clearance the jig needed. On the lid it
+  is the moat: 1.2 mm of it, with letters on one side and the face on the other,
+  both spreading into it.
+- **A clean first layer on the lid**, not a squashed one. Its outer face,
+  lettering and all, is layer one. There is nothing to gain from extra squish
+  here — the face is 26 × 56 mm of flat contact.
+
+The moat is a bridge, but a 1.2 mm one, and it is over in a single layer. There
+is nothing to set for it.
 
 ## Regenerating
 
 ```
-pip install trimesh manifold3d rtree numpy matplotlib pillow
+pip install trimesh manifold3d rtree numpy scipy matplotlib pillow
 python3 build.py
 ```
 
@@ -265,12 +327,12 @@ cannot catch a jig whose real section differs from the table. Measure carefully.
 Every dimension is measured off those meshes, so the script also self-checks:
 watertightness,
 an unchanged footprint, at least 0.5 mm of material in every column under the
-board, that no piece of the engraving is finer than `NOZZLE` (an erosion by
+board, that no piece of the marking is finer than `NOZZLE` (an erosion by
 half a bead — whatever vanishes is a feature the printer cannot lay down), a clear path for the jumper, a clear run for the cable from outside the
 end wall to pin 39, room to drop that cable in from above, clearance between
 the cable and the lid's rim, that the lid's tongue misses the base and beds
 into the cable, and that the hold-down ribs miss the base and land on the
 board. For the jig it does the real thing: puts
-the jig mesh in the slot at three positions along the slide and checks that
-not one of its 3188 vertices ends up inside plastic. It exits non-zero if any
-check fails.
+the jig's profile in the slot at three positions along the slide, then four
+more off centre and off the roof, and checks that not one of its corners ends
+up inside plastic. It exits non-zero if any check fails.

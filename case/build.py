@@ -172,39 +172,65 @@ JIG_PROFILE = (
     (4.00, 5.30),                # the tip
 )
 
-# The slot's own profile is two straight steps, 9.70 for the flange and 7.70
-# for the tongue - the jig plus 0.3 a side, the fit RCM_Holder_v1 uses.
-# Straight, not following the tongue's taper: the extra slack up there costs
-# nothing and it prints and measures better than a contour.
+# The slot's own profile is two straight steps, one for the flange and one for
+# the tongue. Straight, not following the tongue's taper: the extra slack up
+# there costs nothing and it prints and measures better than a contour.
 #
-# It goes in upside down, which is what retains it: the 9.70 chamber ends up
-# buried and the mouth at the open underside is only 7.70, narrower than the
-# 9.09 flange.
+# It goes in upside down, which is what retains it: the flange chamber ends up
+# buried and the mouth at the open underside is narrower than the 9.09 flange.
+#
+# The widths were 9.70 / 7.70 - RCM_Holder_v1's own fit, 0.3 mm a side. That
+# holder is a tray open at the top and is dropped into, and 0.3 a side is right
+# for it. This is a horizontal rail, printed: the mouth is a first layer and
+# elephant-foots inwards, the flange chamber's roof is a bridge and sags into
+# it, and the ledge that carries the flange is an overhang that droops. All
+# three eat the same 0.3, and printed it came out a press fit that then had to
+# be fought back out. 0.4 a side, and the vertical slack below.
 JIG_X = -1.0                     # off centre, but only just: the cable duct
                                  # wants one side of the floor and the
                                  # deepened pin-tail channel the other, and
                                  # the slot has to leave a wall between
-JIG_FLANGE_W = 9.70              # RCM_Holder_v1.stl, scaled 1/10
-JIG_TONGUE_W = 7.70
-JIG_ROOF = 0.20                  # slack over the tip
+JIG_FLANGE_W = 9.90              # 0.405 a side on a 9.09 flange
+JIG_TONGUE_W = 7.90              # 0.40 a side on a 7.10 tongue. This one is
+                                 # also the mouth, so it is what the retention
+                                 # check measures: 8.09 is the most it can be
+                                 # and still leave 0.5 mm of lip.
+JIG_ROOF = 0.30                  # slack over the tip, against bridge sag
+JIG_DROP = 0.25                  # slack under the flange, against ledge droop
 JIG_LEAD = 0.5                   # slack at the far end of the slot
+
+# The mouth is flared: JIG_FLARE wider at the face, nominal JIG_FLARE_L in. A
+# printed mouth is never the size it was drawn, and without a lead-in the jig
+# has to be aimed at the rails rather than finding them.
+JIG_FLARE = 0.45
+JIG_FLARE_L = 2.5
 
 # Two bumps in the flange chamber, a few mm inside the mouth. They are what
 # stops the jig sliding straight back out: the slot is horizontal and open at
-# one end, and 0.3 mm a side of clearance does not hold anything by friction.
-# The donor holder needs none because it is a tray open at the top, where
-# gravity does the job. Set to 0 for no bumps at all.
-JIG_DETENT = 0.5                 # 0.3 of it is taken up by the clearance,
-                                 # leaving 0.2 a side of real interference
+# one end, and clearance does not hold anything by friction. The donor holder
+# needs none because it is a tray open at the top, where gravity does the job.
+# Set to 0 for no bumps at all.
+#
+# The clearance eats it, so widening the slot softens the click on its own:
+# at 9.70 this left 0.2 mm a side of interference, which is a lot to shove a
+# 4 mm rail past, and at 9.90 it leaves 0.1. That is the intended amount - it
+# should click, not lock.
+JIG_DETENT = 0.5
 
-# Everything else about the jig follows from the table, and has to: put the
-# step even 0.1 mm high and the 9.09 flange fouls the 7.70 tongue slot, which
-# shows up only as a jig that will not go in.
+# Everything else about the jig follows from the table, and has to.
+#
+# The step goes just below the last height at which the jig is still wider than
+# the tongue slot - that is where its flange ends, and it is derived rather than
+# typed. Put it even 0.1 mm high and the 9.09 flange fouls the 7.90 tongue slot,
+# which shows up only as a jig that will not go in. JIG_DROP is how far below
+# that it sits, and with JIG_ROOF it is the vertical slack: 0.30 over the tip
+# and 0.25 under the flange. Both are there for the print, not the part - a
+# bridged roof sags and an overhanging ledge droops, and 0.08 mm of slack under
+# the flange, which is what this had, is less than either.
 JIG_FLANGE = max(w for _, w in JIG_PROFILE)          # 9.09
 JIG_HEIGHT = max(z for z, _ in JIG_PROFILE)          # 4.00
 TRAY = JIG_HEIGHT + JIG_ROOF                         # how far the floor grows
-JIG_STEP_Z = max(z for z, w in JIG_PROFILE
-                 if w > (JIG_FLANGE_W + JIG_TONGUE_W) / 2) + 0.1
+JIG_STEP_Z = max(z for z, w in JIG_PROFILE if w > JIG_TONGUE_W) + JIG_DROP
 JIG_FLANGE_H = JIG_ROOF + JIG_STEP_Z
 
 MESH_GRID = 1000                 # coordinates are stored to 0.001 mm
@@ -369,6 +395,18 @@ def jig_solid():
     return m
 
 
+def flare(w, y0, y1, z0, z1):
+    """Lead-in for one step of the slot: JIG_FLARE wider at y0, w at y1.
+
+    A tapered prism, so the jig is steered onto the rails over JIG_FLARE_L
+    instead of having to arrive on them.
+    """
+    a = slab(JIG_X - w / 2 - JIG_FLARE, JIG_X + w / 2 + JIG_FLARE,
+             y0, y0 + 0.01, z0, z1)
+    b = slab(JIG_X - w / 2, JIG_X + w / 2, y1, y1 + 0.01, z0, z1)
+    return trimesh.util.concatenate([a, b]).convex_hull
+
+
 def jig_slot():
     """Two-step rail slot, upside down, opening at the end face.
 
@@ -380,10 +418,15 @@ def jig_slot():
     y0 = -OUT_L / 2 - 1.0
     y1 = -OUT_L / 2 + JIG_LEN + JIG_LEAD
     step = FLOOR_Z0 - JIG_FLANGE_H
+    floor = FLOOR_Z0 - TRAY - 0.2
     return U(rrect(JIG_X - JIG_FLANGE_W / 2, JIG_X + JIG_FLANGE_W / 2,
                    y0, y1, step, FLOOR_Z0 + 0.01, 0.4),
              rrect(JIG_X - JIG_TONGUE_W / 2, JIG_X + JIG_TONGUE_W / 2,
-                   y0, y1, FLOOR_Z0 - TRAY - 0.2, step + 0.01, 0.4))
+                   y0, y1, floor, step + 0.01, 0.4),
+             flare(JIG_FLANGE_W, y0, -OUT_L / 2 + JIG_FLARE_L,
+                   step, FLOOR_Z0 + 0.01),
+             flare(JIG_TONGUE_W, y0, -OUT_L / 2 + JIG_FLARE_L,
+                   floor, step + 0.01))
 
 
 def load():
@@ -479,43 +522,78 @@ GLYPHS = {
     'H': [[(0, 1), (0, 0)], [(1, 1), (1, 0)], [(0, .5), (1, .5)]],
 }
 
-# RAISED letters in a sunken field, not engraved strokes - and that is the
-# whole point, not a style choice. The lid prints outer-face-down, so anything
-# cut into that face is a hole in the first layers: first-layer squash closes
-# it and the perimeters round a 1 mm slot smear together. Printed at 0.45 mm
-# stroke it came out as nothing, and at 1.0 mm it was still unreadable.
+# RAISED letters, each in a moat of its own. The lid prints outer-face-down, so
+# this face is layer one, and there are three ways to mark it. Two have been
+# printed and neither works:
 #
-# This way round, the letters are solid material standing on the glass, which
-# is the one thing an FDM printer does perfectly, and the contrast comes from
-# the 0.6 mm field sunk around them. The letters are pillars off the field
-# floor, so they are not loose islands either.
+#   - cut the STROKES into it and they are holes in the first layers.
+#     First-layer squash closes them and the perimeters round a 1 mm slot smear
+#     together. At a 0.45 mm stroke it came out as nothing at all, and at
+#     1.0 mm it was still unreadable.
+#   - sink a whole PLATE around them, letters left standing at face height, and
+#     that plate's floor is a 17 x 15 mm bridge over open air, 0.6 mm above the
+#     glass, laid down while the fan is still off, with nothing underneath it
+#     but the letters. It sags onto the letter tops and smears them. That is
+#     both halves of the second print: the field that looks chewed, and the
+#     lettering that looks chewed because the field landed on it.
+#
+# So neither. What is sunk is a MOAT - the strokes dilated by HALO, less the
+# strokes - and the rest of the face is left alone. The face stays flat and
+# whole, which is a proper first layer; the letters are solid material standing
+# on the glass, which is the one thing an FDM printer does perfectly; and the
+# only thing bridging is a 1.2 mm ribbon following the lettering, which is
+# nothing to bridge and is over in one layer. The letters read because they are
+# outlined, not because they sit in a tray.
+#
+# The stroke is a whole number of beads on purpose: 1.20 is 3 x 0.4 or 2 x 0.6,
+# so the slicer lays it as full extrusions. 1.00 is 2.5 beads at 0.4 - two
+# perimeters and a gap it has to fudge - and that fudge is what a 1 mm letter
+# looks like close up.
 #
 # The W needs its own width, which is why GLYPH_W exists. Its legs pass within
-# 0.331 of the glyph width of each other, so at a 1 mm stroke a 3 mm cell puts
-# them 0.0 apart - they merge into a blob. 5.2 mm leaves 0.72, clear of a bead.
-# Nothing else in SW or PC is dense enough to care. Two letters, or nothing legible.
+# 0.331 of the glyph width of each other, so at a 1.2 mm stroke a 2.8 mm cell
+# puts them 0.0 apart - they merge into a blob. 5.6 mm leaves 0.65, clear of a
+# bead. Nothing else in SW or PC is dense enough to care.
 TEXT_H = 4.40                    # cap height
-TEXT_W = 3.00                    # glyph width
-TEXT_GAP = 1.70                  # between glyphs: it has to clear a stroke
+TEXT_W = 2.80                    # glyph width
+TEXT_GAP = 2.10                  # between glyphs: it has to clear a stroke
                                  # plus a bead, or adjacent letters merge
-TEXT_STROKE = 1.00
-TEXT_DEPTH = 0.60                # how deep it is cut into the 2 mm plate
-GLYPH_W = {'W': 5.2}             # cells that need to be wider than TEXT_W
-TEXT_X = -1.8                    # where the words start
-TICK_X = (-6.6, -5.2)            # the leader, pointing at the pin gap
-LEAD_X = -3.6                    # where it stops: LEAD_GAP short of the word
-LEAD_GAP = 0.8                   # daylight between leader and lettering
-LABELS = (('SW', -20.32, -15.7),  # mark, the pin gap it means, where it sits
-          ('PC', -22.86, -22.9))
-
-# The sunken field, derived from the labels rather than typed in. Two goes at
-# typing it went wrong the same way: the strokes are drawn as capsules, so a
-# letter reaches half a stroke past its nominal cap height, and the margin
-# that looked like 1.0 mm was really 0.5 - narrower than a bead, and the check
-# threw it out. FIELD_MARGIN is the real clearance round the lettering.
-FIELD_MARGIN = 1.0
-FIELD_LEFT = -7.2                # runs into the jumper window on purpose, so
-                                 # the leaders reach the pins
+TEXT_STROKE = 1.20               # 3 beads at 0.4, 2 at 0.6
+TEXT_DEPTH = 0.60                # how deep the moat is cut into the 2 mm plate
+HALO = 1.20                      # and how wide it is round every stroke. A
+                                 # bead of squash a side still leaves 0.6 of
+                                 # it open, which is what has to survive
+GLYPH_W = {'W': 5.6}             # cells that need to be wider than TEXT_W
+# The leader used to have a kink in it - a tick along the pin row, then a turn
+# up to the word. With a moat round it that does not survive: SW's word sits
+# 5.8 mm above the gap it points at, so the turn climbs past the top corner of
+# the jumper window, and between the moat and the window edge the plate pinched
+# to 0.35 mm. A rib that narrow, on the first layer, is exactly what the
+# opening check is for. One straight line from the window edge to the word has
+# no corner to squeeze past: it leaves the edge merged into the window and
+# never comes back to it.
+LEAD_X0 = WIN_X1 + TEXT_STROKE / 2
+                                 # it starts flush with the edge of the jumper
+                                 # window rather than hanging 0.3 mm over it
+                                 # with nothing underneath
+TEXT_X = -1.60                   # where the words start
+LEAD_X = TEXT_X                  # and where the leader stops: ON the word,
+                                 # at the middle of its left-hand stroke.
+                                 # There used to be 0.8 mm of daylight there,
+                                 # which a moat cannot afford - it left a
+                                 # peninsula of plate reaching in between the
+                                 # leader's end and the lettering, pinched
+                                 # under a bead where it met them. Joined,
+                                 # leader and word are one island with one
+                                 # outline, and there is nothing to pinch.
+# Mark, the pin gap it means, where it sits. The first two numbers are the
+# board's and are not free; the third is, and it moved 1.2 mm up the lid when
+# the moat arrived. Sunk as a plate the lettering could sit 0.5 mm from the
+# rim and nobody minded, because the plate stopped short of it. A moat does
+# not stop short: it left a 0.4 mm rib of plate between itself and the edge
+# roundover, which is under a bead wide and is what the opening check found.
+LABELS = (('SW', -20.32, -14.5),
+          ('PC', -22.86, -21.7))
 
 
 def word_width(text):
@@ -523,13 +601,35 @@ def word_width(text):
             + TEXT_GAP * (len(text) - 1))
 
 
-def field_box():
-    reach = TEXT_H / 2 + TEXT_STROKE / 2
-    x1 = (TEXT_X + max(word_width(w) for w, _, _ in LABELS)
-          + TEXT_STROKE / 2 + FIELD_MARGIN)
-    mids = [m for _, _, m in LABELS]
-    return (FIELD_LEFT, x1,
-            min(mids) - reach - FIELD_MARGIN, max(mids) + reach + FIELD_MARGIN)
+def marking_box():
+    """Everything the marking touches, padded by a millimetre.
+
+    The checks sample over this. Derived rather than typed, and that is not
+    housekeeping: the literal it replaces stopped at x = 4.6, five millimetres
+    short of the W, so the one check that would have caught a merged letter
+    was never looking at it.
+    """
+    reach = TEXT_STROKE / 2 + HALO + 1.0
+    x1 = TEXT_X + max(word_width(w) for w, _, _ in LABELS)
+    ys = [y for _, t, m in LABELS
+          for y in (t, m - TEXT_H / 2, m + TEXT_H / 2)]
+    return LEAD_X0 - reach, x1 + reach, min(ys) - reach, max(ys) + reach
+
+
+def moat_point():
+    """A point that is in the moat by construction, for the depth check.
+
+    Half a stroke plus half a halo off the side of the second label's leader,
+    which is the shallowest line in the marking and the one with the most
+    daylight round it. Probing the old sunken plate only needed a point
+    somewhere inside a rectangle; a 1.2 mm moat has to be aimed at.
+    """
+    _, tick_y, y_mid = LABELS[1]
+    a = np.array([LEAD_X0, tick_y])
+    b = np.array([LEAD_X, lead_y(tick_y, y_mid)])
+    d = (b - a) / np.linalg.norm(b - a)
+    p = (a + b) / 2 + np.array([d[1], -d[0]]) * (TEXT_STROKE + HALO) / 2
+    return p[0], p[1]
 
 # What the printer can actually resolve. Every cut and every raised sliver in
 # the marking is checked against this.
@@ -546,12 +646,31 @@ def capsule(p0, p1, w, z0, z1):
     return trimesh.util.concatenate(parts).convex_hull
 
 
-def label(text, tick_y, y_mid, z0, z1):
-    """The word, and the leader that says which pair of pins it means."""
-    parts = [capsule((TICK_X[0], tick_y), (TICK_X[1], tick_y),
-                     TEXT_STROKE, z0, z1),
-             capsule((TICK_X[1], tick_y), (LEAD_X, y_mid),
-                     TEXT_STROKE, z0, z1)]
+def lead_y(tick_y, y_mid):
+    """Where the leader meets the word: the pin's own height, if the word
+    reaches that far, and the nearest corner of it if not.
+
+    Two strokes meeting at an acute angle leave a wedge of moat that closes to
+    a point, and the sharper the angle the more of it the nozzle cannot lay.
+    Aimed at the middle of the word the SW leader came in at 38 degrees to its
+    left-hand stroke and lost 0.30 mm2 in the corner - the whole budget. Aimed
+    at the bottom of it there is no corner at all: the leader arrives in line
+    with the foot of the S and the two just continue into each other. PC is
+    unaffected either way; its pin gap is level with its own word, which is
+    what this rule gives it.
+    """
+    return min(max(tick_y, y_mid - TEXT_H / 2), y_mid + TEXT_H / 2)
+
+
+def label(text, tick_y, y_mid, stroke, z0, z1):
+    """The word, and the leader that says which pair of pins it means.
+
+    Drawn twice: once at TEXT_STROKE for the letters themselves, and once fat
+    for the halo. The moat is the difference, so it is the dilation of exactly
+    what is on the lid and cannot drift from it.
+    """
+    parts = [capsule((LEAD_X0, tick_y), (LEAD_X, lead_y(tick_y, y_mid)),
+                     stroke, z0, z1)]
     x = TEXT_X
     for ch in text:
         w = GLYPH_W.get(ch, TEXT_W)
@@ -560,9 +679,26 @@ def label(text, tick_y, y_mid, z0, z1):
                 parts.append(capsule(
                     (x + a[0] * w, y_mid + (a[1] - .5) * TEXT_H),
                     (x + b[0] * w, y_mid + (b[1] - .5) * TEXT_H),
-                    TEXT_STROKE, z0, z1))
+                    stroke, z0, z1))
         x += w + TEXT_GAP
     return U(*parts)
+
+
+def fan(z0, z1):
+    """The plate trapped between the two leaders, taken into the moat.
+
+    Two lines leaving the same edge 2.54 mm apart and arriving 7.2 mm apart
+    trap a wedge of plate between them, and a wedge has a point: it pinches
+    below a bead long before it closes. There is nowhere to move it to - the
+    words are as far apart as the lid allows and each is as near its own pin
+    gap as the one below it permits - so the wedge goes into the moat, and the
+    leaders come out as its two edges rather than as lines with a splinter
+    between them.
+    """
+    pts = [(LEAD_X0, LABELS[0][1]), (LEAD_X, lead_y(*LABELS[0][1:])),
+           (LEAD_X, lead_y(*LABELS[1][1:])), (LEAD_X0, LABELS[1][1])]
+    return trimesh.PointCloud(np.array([[x, y, z] for z in (z0, z1)
+                                        for x, y in pts])).convex_hull
 
 
 def to_lid(mesh):
@@ -623,12 +759,15 @@ def marking():
     19-20 leaves GP14 on its pull-up: device, so that pair is the PC.
     """
     top = LID_FLIP_Z + 2.0           # outer face of the lid, assembled
-    strokes = U(*[label(w, tick, mid, top - TEXT_DEPTH - 0.05, top + 0.05)
+    floor = top - TEXT_DEPTH
+    strokes = U(*[label(w, tick, mid, TEXT_STROKE, floor - 0.05, top + 0.05)
                   for w, tick, mid in LABELS])
-    # Sink the field, keep the letters. The field runs into the jumper window
-    # on its left, which is what makes the leaders reach the pins.
-    field = rrect(*field_box(), top - TEXT_DEPTH, top + 0.05, 1.2)
-    art = D(field, strokes)
+    halo = U(*[label(w, tick, mid, TEXT_STROKE + 2 * HALO, floor, top + 0.05)
+               for w, tick, mid in LABELS], fan(floor, top + 0.05))
+    # The moat, and nothing else: what is not moat stays face. It runs into
+    # the jumper window at the left, which is what makes the leaders reach
+    # the pins - there is no material there to cut, so it simply opens out.
+    art = D(halo, strokes)
     art.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
     art.apply_translation([0, 0, LID_FLIP_Z])
     return art
@@ -913,6 +1052,18 @@ def main():
               ' (want 0)' % (stop, hit.sum(), len(v)))
         good &= hit.sum() == 0
 
+    # ...and again, off centre and off the roof. The test above says the
+    # nominal position fits, which a press fit also does. This one says there
+    # is room to be wrong by about what a printer is wrong by: a mouth that
+    # elephant-foots in, a bridged roof that sags, a ledge that droops. The
+    # first print fitted the check above and had to be fought in and out.
+    for dx, dz in ((0.30, 0.0), (-0.30, 0.0), (0.0, 0.25), (0.30, -0.20)):
+        v = j.vertices + [dx, -OUT_L / 2 - j.bounds[0][1], dz]
+        hit = base.contains(v) & (np.abs(v[:, 1] - det_y) > 2.5)
+        print('jig %+.2f mm across, %+.2f mm up: %d of %d corners in the'
+              ' plastic (want 0)' % (dx, dz, hit.sum(), len(v)))
+        good &= hit.sum() == 0
+
     # The two straight steps have to clear the jig's real outline at every
     # height, taper and all. This is what would catch a wrong scale factor
     # on the donor holder, or a different jig.
@@ -1022,8 +1173,9 @@ def main():
     from scipy import ndimage
     top = LID_FLIP_Z + 2.0
     step = 0.08
-    xs = np.arange(-7.4, 4.6, step)
-    ys = np.arange(-27.2, -14.8, step)
+    mx0, mx1, my0, my1 = marking_box()
+    xs = np.arange(mx0, mx1, step)
+    ys = np.arange(my0, my1, step)
     X, Y = np.meshgrid(xs, ys, indexing='ij')
     solid = lid_a.contains(np.column_stack([
         X.ravel(), Y.ravel(),
@@ -1038,7 +1190,7 @@ def main():
     worst = 0.0
     edge = np.zeros_like(solid)               # the sampling border erodes too,
     edge[r + 1:-r - 1, r + 1:-r - 1] = True   # so its losses do not count
-    for name, region in (('sunken field', ~solid), ('raised letters', solid)):
+    for name, region in (('moat', ~solid), ('face and letters', solid)):
         opened = ndimage.binary_dilation(
             ndimage.binary_erosion(region, k, border_value=1), k)
         lost = region & ~opened & edge
@@ -1054,11 +1206,14 @@ def main():
             print('     TOO FINE around (%+.2f, %+.2f)' % (big[1], big[2]))
     good &= worst <= 0.30
 
-    # Probe the field, not a letter: the letters now stand at full height.
+    # Probe the moat, not a letter: the letters stand at full face height, and
+    # so does everything around them now.
+    px, py = moat_point()
     zs = np.arange(top - 1.2, top - 0.005, 0.01)
     col = lid_a.contains(np.column_stack([
-        np.full(zs.size, field_box()[1] - 0.5), np.full(zs.size, -21.0), zs]))
-    print('marking depth: %.2f mm into a 2.00 mm plate' % ((~col).sum() * 0.01))
+        np.full(zs.size, px), np.full(zs.size, py), zs]))
+    print('moat at (%+.2f, %+.2f): %.2f mm deep into a 2.00 mm plate'
+          % (px, py, (~col).sum() * 0.01))
     good &= (~col).sum() * 0.01 >= TEXT_DEPTH - 0.05
 
     # Retention. The whole point of railing the jig instead of boxing it is
