@@ -3,6 +3,10 @@
        alt="pico-rcm - Fusee Gelee payload injector on a Raspberry Pi Pico">
 </p>
 
+<p align="center">
+  <a href="https://www.paypal.me/marcogarzola"><img src="https://img.shields.io/badge/Donate-PayPal-00457C?logo=paypal&logoColor=white" alt="Donate with PayPal"></a>
+</p>
+
 # pico-rcm
 
 An RCM payload injector for the Nintendo Switch, running on a Raspberry Pi
@@ -493,3 +497,11 @@ case/
   build.py            builds both from the donor model, checks them, and
                       draws the section and the previews
 ```
+
+---
+
+## Support
+
+If this project saved you some time, you can buy me a coffee ☕
+
+[![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?logo=paypal&logoColor=white)](https://www.paypal.me/marcogarzola)
